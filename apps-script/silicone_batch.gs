@@ -35,6 +35,7 @@
  *        BATCH_THINKING_LEVEL     기본 MEDIUM
  *        BATCH_ITEMS_PER_REQUEST  기본 50  (요청 1건에 담는 상품 수, 10~100)
  *        BATCH_ROWS_PER_FILE      기본 2000 (JSONL 파일 1개에 담는 상품 수)
+ *        BATCH_MAX_ROWS           기본 0 = 제한 없음. 시험할 때 200 등으로 두면 그 행 수만 업로드
  *        TITLE_MAX_CHARS / FEATURES_MAX_CHARS 등은 silicone_classifier.gs 설정을 그대로 사용
  *
  * 권한
@@ -53,7 +54,8 @@ const BATCH_DEFAULTS = {
   BATCH_MODEL_ID: "gemini-3.5-flash",
   BATCH_THINKING_LEVEL: "MEDIUM",
   BATCH_ITEMS_PER_REQUEST: 50,
-  BATCH_ROWS_PER_FILE: 2000
+  BATCH_ROWS_PER_FILE: 2000,
+  BATCH_MAX_ROWS: 0
 };
 
 /* 배치 단가 (표준 단가의 50%, USD / 1M tokens). 로그의 예상 비용 계산용 */
@@ -99,6 +101,7 @@ function loadBatchSettings_() {
   s.batchThinking = thinking;
   s.itemsPerRequest = int("BATCH_ITEMS_PER_REQUEST", 10, 100);
   s.rowsPerFile = int("BATCH_ROWS_PER_FILE", 100, 20000);
+  s.maxRows = int("BATCH_MAX_ROWS", 0, 10000000);
   return s;
 }
 
@@ -154,18 +157,19 @@ function batchExportInput() {
     const lastRow = sheet.getLastRow();
     const settings = Object.assign({}, s, { titleMax: run.titleMax, featuresMax: run.featuresMax });
 
-    while (run.cursor <= lastRow) {
+    while (run.cursor <= lastRow && !(s.maxRows && run.rows >= s.maxRows)) {
       if (elapsed_(startedAt) >= BATCH_LIMITS.STOP_AFTER_MS) {
         saveBatchRun_(run);
         console.log("시간 제한 대비 중단: " + run.files.length + "개 파일 업로드됨. batchExportInput()을 다시 실행하면 " + run.cursor + "행부터 이어갑니다.");
         return;
       }
 
-      // 대기 행을 rowsPerFile 개 모을 때까지 시트를 읽음
+      // 대기 행을 fileCap 개 모을 때까지 시트를 읽음 (BATCH_MAX_ROWS가 있으면 남은 한도까지만)
+      const fileCap = s.maxRows ? Math.min(s.rowsPerFile, s.maxRows - run.rows) : s.rowsPerFile;
       const items = [];
       let row = run.cursor;
-      while (row <= lastRow && items.length < s.rowsPerFile) {
-        const n = Math.min(BATCH_LIMITS.READ_ROWS, lastRow - row + 1, s.rowsPerFile - items.length + 500);
+      while (row <= lastRow && items.length < fileCap) {
+        const n = Math.min(BATCH_LIMITS.READ_ROWS, lastRow - row + 1, fileCap - items.length + 500);
         const block = readRowsForBatch_(sheet, cols, row, n);
         let noDataDirty = false;
 
@@ -181,7 +185,7 @@ function batchExportInput() {
           }
           item.id = row + i; // 시트 행 번호를 그대로 id로 사용 → 결과를 행에 바로 매칭
           items.push(item);
-          if (items.length >= s.rowsPerFile) {
+          if (items.length >= fileCap) {
             if (noDataDirty) block.writeBack();
             noDataDirty = false;
             row = row + i + 1;
@@ -189,7 +193,7 @@ function batchExportInput() {
           }
         }
         if (noDataDirty) block.writeBack();
-        if (items.length < s.rowsPerFile) row = row + n;
+        if (items.length < fileCap) row = row + n;
       }
 
       if (items.length) {
