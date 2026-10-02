@@ -1,5 +1,5 @@
 /************************************************************
- * Keepa_Top100 — 실리콘 차별화 가능성 분류기 (Vertex AI Gemini Flash-Lite)
+ * Keepa_Top100 — 실리콘 차별화 가능성 분류기 (Vertex AI Gemini Flash)
  *
  * 하는 일
  *  - "실리콘_차별화_v2" 및 "실리콘_판단근거_v2" 컬럼을 없을 때만 추가
@@ -22,7 +22,7 @@
  *
  * Script Properties (프로젝트 설정 → 스크립트 속성)
  *  필수  GCP_PROJECT_ID
- *  선택  VERTEX_MODEL_ID   기본 gemini-3.5-flash-lite
+ *  선택  VERTEX_MODEL_ID   기본 gemini-3.5-flash  (비용을 줄이려면 gemini-3.5-flash-lite)
  *        VERTEX_LOCATION   기본 global
  *        THINKING_LEVEL    기본 HIGH  (MINIMAL / LOW / MEDIUM / HIGH, thinkingConfig를 아예 빼려면 NONE)
  *        SPREADSHEET_ID    기본 아래 DEFAULTS 값 (URL 그대로 넣어도 됨)
@@ -188,7 +188,7 @@ const DEFAULTS = {
   RESULT_HEADER: "실리콘_차별화_v2",
   REASON_HEADER: "실리콘_판단근거_v2",
   VERTEX_LOCATION: "global",
-  VERTEX_MODEL_ID: "gemini-3.5-flash-lite",
+  VERTEX_MODEL_ID: "gemini-3.5-flash",
   THINKING_LEVEL: "HIGH",
   BATCH_SIZE: 20,          // 요청 1건에 담는 상품 수 (HIGH thinking은 배치가 클수록 상품당 사고량이 줄어 20 권장)
   PARALLEL_REQUESTS: 8,    // fetchAll 동시 요청 수
@@ -223,8 +223,12 @@ const LIMITS = {
   TRIGGER_EVERY_MINUTES: 5
 };
 
-/* 로그용 예상 비용 (gemini-3.5-flash-lite 표준 단가, USD / 1M tokens). thinking 토큰은 output 단가로 과금. 모델을 바꾸면 수정 */
-const PRICE_PER_1M_TOKENS = { input: 0.30, output: 2.50 };
+/* 로그용 예상 비용 (표준 단가, USD / 1M tokens). thinking 토큰은 output 단가로 과금.
+ * 모델 ID가 키로 시작하면 해당 단가 사용 (긴 키 우선). 목록에 없는 모델을 쓰면 여기에 추가 */
+const PRICE_PER_1M_TOKENS = {
+  "gemini-3.5-flash-lite": { input: 0.30, output: 2.50 },
+  "gemini-3.5-flash": { input: 1.50, output: 9.00 }
+};
 
 const STATE_KEYS = {
   CURSOR: "SILI_CURSOR_ROW",
@@ -1068,8 +1072,26 @@ function addUsage_(stats, u) {
 
 /** 표준 단가 기준 비용 (캐시 할인 미반영 → 실제보다 약간 높게 나옴) */
 function estimateCost_(stats) {
-  return (stats.promptTokens * PRICE_PER_1M_TOKENS.input +
-    (stats.outputTokens + stats.thoughtTokens) * PRICE_PER_1M_TOKENS.output) / 1e6;
+  const price = priceForModel_(currentModelId_());
+  return (stats.promptTokens * price.input +
+    (stats.outputTokens + stats.thoughtTokens) * price.output) / 1e6;
+}
+
+function currentModelId_() {
+  const v = PropertiesService.getScriptProperties().getProperty("VERTEX_MODEL_ID");
+  return String(v && String(v).trim() ? v : DEFAULTS.VERTEX_MODEL_ID).trim();
+}
+
+/** 모델 ID에 맞는 단가. 모르는 모델이면 가장 비싼 단가로 보수적으로 계산 */
+function priceForModel_(modelId) {
+  const keys = Object.keys(PRICE_PER_1M_TOKENS).sort(function (a, b) { return b.length - a.length; });
+  for (let i = 0; i < keys.length; i++) {
+    if (modelId.indexOf(keys[i]) === 0) return PRICE_PER_1M_TOKENS[keys[i]];
+  }
+  return keys.reduce(function (best, k) {
+    const p = PRICE_PER_1M_TOKENS[k];
+    return !best || p.output > best.output ? p : best;
+  }, null);
 }
 
 function logRunSummary_(stats, startedAt) {
