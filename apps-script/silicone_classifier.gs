@@ -122,11 +122,11 @@ const REASON_ADDON = [
   "Example: \"[차별화강함] 카시트 보호매트: 오염·눌림 자국 문제를 실리콘이 해결\"."
 ].join("\n");
 
-/* 사용자 메시지: 배치 안 상품을 JSON Lines로 전달 */
+/* 사용자 메시지: 배치 안 상품을 JSON Lines로 전달 (it.id가 있으면 그 값을, 없으면 1부터 순번을 id로 사용) */
 function buildUserText_(items) {
   const lines = items.map(function (it, k) {
     return JSON.stringify({
-      id: k + 1,
+      id: it.id != null ? it.id : k + 1,
       category_name: it.category_name,
       title: it.title,
       features: it.features
