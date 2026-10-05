@@ -19,6 +19,12 @@
  *     빈 칸이 남으면 1)부터 다시 → 남은 행만 새 작업으로 처리
  *     batchResetRun()       현재 배치 실행 상태를 지우고 새로 시작 (GCS 파일·시트 값은 유지)
  *
+ * 자동 실행 (권장)
+ *  batchStartAuto()   10분 트리거 1개를 설치하고 즉시 1회 실행. 트리거가 단계에 맞춰
+ *                     업로드 → 작업 생성 → 상태 확인 → 결과 기록 → 빈 칸 재처리(최대 3회차) 를 진행하고
+ *                     끝나면 스스로 트리거를 삭제합니다. 이 방식에서는 콘솔에서 작업을 따로 만들지 마세요.
+ *  batchStopAuto()    트리거만 삭제 (진행 상태 유지, batchStartAuto로 재개)
+ *
  * GCP 콘솔에서 직접 작업을 만들 경우
  *  Vertex AI → 배치 추론(Batch inference) → 만들기
  *   - 모델: Gemini 3.5 Flash (BATCH_MODEL_ID 와 같은 모델)
@@ -331,7 +337,12 @@ function batchCheckJob() {
     console.log("이 스크립트로 만든 배치 작업이 없습니다. 콘솔에서 만들었다면 콘솔에서 상태를 확인하고, 끝나면 batchImportResults()를 실행하세요.");
     return;
   }
+  const job = fetchBatchJob_(run);
+  console.log(describeBatchJob_(job, run) +
+    (isBatchJobDone_(job.state) ? "\n→ batchImportResults()를 실행해 시트에 기록하세요." : ""));
+}
 
+function fetchBatchJob_(run) {
   const host = run.location === "global" ? "aiplatform.googleapis.com" : run.location + "-aiplatform.googleapis.com";
   const res = UrlFetchApp.fetch("https://" + host + "/v1/" + run.jobName, {
     headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
@@ -340,16 +351,25 @@ function batchCheckJob() {
   if (res.getResponseCode() !== 200) {
     throw new Error("상태 조회 실패 HTTP " + res.getResponseCode() + ": " + res.getContentText().slice(0, 500));
   }
-  const job = JSON.parse(res.getContentText());
+  return JSON.parse(res.getContentText());
+}
+
+function describeBatchJob_(job, run) {
   const st = job.completionStats || {};
-  console.log(
-    "작업 " + job.name + "\n상태: " + job.state +
+  return "작업 " + job.name + "\n상태: " + job.state +
     " | 성공 요청 " + (st.successfulCount || 0) + " / 실패 " + (st.failedCount || 0) + " / 미완료 " + (st.incompleteCount || 0) +
     " (전체 " + run.requests + "건)" +
-    (job.error ? "\n오류: " + JSON.stringify(job.error).slice(0, 500) : "") +
-    (job.state === "JOB_STATE_SUCCEEDED" || job.state === "JOB_STATE_PARTIALLY_SUCCEEDED"
-      ? "\n→ batchImportResults()를 실행해 시트에 기록하세요." : "")
-  );
+    (job.error ? "\n오류: " + JSON.stringify(job.error).slice(0, 500) : "");
+}
+
+/** 결과를 가져올 수 있는 종료 상태 */
+function isBatchJobDone_(state) {
+  return state === "JOB_STATE_SUCCEEDED" || state === "JOB_STATE_PARTIALLY_SUCCEEDED";
+}
+
+/** 결과 없이 끝난 상태 → 자동 실행 중지 */
+function isBatchJobDead_(state) {
+  return state === "JOB_STATE_FAILED" || state === "JOB_STATE_CANCELLED" || state === "JOB_STATE_EXPIRED";
 }
 
 function batchJobsUrl_(projectId, location) {
@@ -629,4 +649,122 @@ function batchPriceForModel_(modelId) {
     if (String(modelId).indexOf(keys[i]) === 0) return BATCH_PRICE_PER_1M_TOKENS[keys[i]];
   }
   return BATCH_PRICE_PER_1M_TOKENS["gemini-3.5-flash"];
+}
+
+
+/* =========================================================
+ * B6. 자동 실행 (트리거 1개로 업로드 → 작업 생성 → 상태 확인 → 결과 기록)
+ * ========================================================= */
+
+const BATCH_AUTO = {
+  HANDLER: "batchAutoStep",
+  EVERY_MINUTES: 10,   // 한 번 실행이 최대 약 4분 30초라 10분 간격이면 겹치지 않음
+  MAX_ROUNDS: 3,       // 응답 누락 행을 새 작업으로 다시 돌리는 최대 회차
+  ROUND_KEY: "SILI_BATCH_AUTO_ROUND"
+};
+
+/** 자동 실행 시작: 트리거 설치 후 즉시 1회 실행. 이 방식을 쓸 때는 콘솔에서 작업을 따로 만들지 마세요 */
+function batchStartAuto() {
+  loadBatchSettings_(); // 설정 오류는 트리거 설치 전에 걸러냄
+  const props = PropertiesService.getScriptProperties();
+  if (!props.getProperty(BATCH_AUTO.ROUND_KEY)) props.setProperty(BATCH_AUTO.ROUND_KEY, "1");
+
+  const removedRealtime = removeTriggers_(); // 실시간 분류 트리거와 동시에 시트를 쓰지 않도록 정리
+  removeBatchAutoTriggers_();
+  ScriptApp.newTrigger(BATCH_AUTO.HANDLER).timeBased().everyMinutes(BATCH_AUTO.EVERY_MINUTES).create();
+
+  console.log(
+    "자동 실행 트리거 설치 (" + BATCH_AUTO.EVERY_MINUTES + "분마다 " + BATCH_AUTO.HANDLER + ")" +
+    (removedRealtime ? ", 실시간 분류 트리거 " + removedRealtime + "개 삭제" : "") + ". 첫 단계를 바로 실행합니다."
+  );
+  batchAutoStep();
+}
+
+function batchStopAuto() {
+  const n = removeBatchAutoTriggers_();
+  console.log("자동 실행 트리거 " + n + "개 삭제. 진행 상태는 유지됩니다 (batchStartAuto로 재개).");
+}
+
+/** 트리거가 10분마다 호출. 현재 단계에 맞는 일을 한 가지만 하고 끝남 */
+function batchAutoStep() {
+  const props = PropertiesService.getScriptProperties();
+  const round = toInt_(props.getProperty(BATCH_AUTO.ROUND_KEY), 1);
+  let run = loadBatchRun_();
+
+  try {
+    if (!run || run.stage === "exporting") {
+      console.log("[자동 " + round + "회차] 업로드 단계");
+      batchExportInput();
+      run = loadBatchRun_();
+      if (run && run.stage === "exported" && !run.files.length) {
+        finishBatchAuto_("처리할 대기 행이 없어 종료합니다.");
+      }
+      return;
+    }
+
+    if (run.stage === "exported") {
+      console.log("[자동 " + round + "회차] 배치 작업 생성");
+      batchSubmitJob();
+      return;
+    }
+
+    if (run.stage === "submitted") {
+      const job = fetchBatchJob_(run);
+      console.log("[자동 " + round + "회차] " + describeBatchJob_(job, run));
+      if (isBatchJobDead_(job.state)) {
+        stopBatchAutoWithError_("배치 작업이 결과 없이 끝났습니다 (" + job.state + "). 로그를 확인한 뒤 batchResetRun() → batchStartAuto()로 다시 시작하세요.");
+        return;
+      }
+      if (!isBatchJobDone_(job.state)) return; // 아직 진행 중 → 다음 트리거에서 다시 확인
+      batchImportResults(); // 끝났으면 바로 가져오기 시작 (남으면 다음 트리거에서 이어서)
+      return;
+    }
+
+    if (run.stage === "importing") {
+      console.log("[자동 " + round + "회차] 결과 가져오기 이어서");
+      batchImportResults();
+      return;
+    }
+
+    if (run.stage === "imported") {
+      const left = run.stats ? run.stats.missing + run.stats.mismatch : 0;
+      const capped = loadBatchSettings_().maxRows > 0; // 시험 모드(BATCH_MAX_ROWS)는 1회차만
+      if (left > 0 && !capped && round < BATCH_AUTO.MAX_ROUNDS) {
+        props.setProperty(BATCH_AUTO.ROUND_KEY, String(round + 1));
+        batchResetRun();
+        console.log("[자동] 빈 칸 " + left + "행이 남아 " + (round + 1) + "회차를 시작합니다.");
+        batchExportInput();
+        return;
+      }
+      finishBatchAuto_(left > 0
+        ? "최대 회차(" + BATCH_AUTO.MAX_ROUNDS + ")에 도달해 종료합니다. 빈 칸 약 " + left + "행은 수동으로 확인하세요."
+        : "모든 행 처리 완료.");
+    }
+  } catch (e) {
+    // 일시적인 네트워크 오류일 수 있으므로 트리거는 유지하고 다음 실행에서 재시도
+    console.error("[자동] 이번 실행 오류 (다음 트리거에서 재시도): " + errMsg_(e));
+    throw e;
+  }
+}
+
+function finishBatchAuto_(msg) {
+  removeBatchAutoTriggers_();
+  PropertiesService.getScriptProperties().deleteProperty(BATCH_AUTO.ROUND_KEY);
+  console.log("✅ [자동] " + msg + " 트리거를 삭제했습니다. showProgress()로 결과를 확인하세요.");
+}
+
+function stopBatchAutoWithError_(msg) {
+  removeBatchAutoTriggers_();
+  console.error("⛔ [자동] " + msg);
+}
+
+function removeBatchAutoTriggers_() {
+  let n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === BATCH_AUTO.HANDLER) {
+      ScriptApp.deleteTrigger(t);
+      n++;
+    }
+  });
+  return n;
 }
