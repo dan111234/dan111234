@@ -36,7 +36,7 @@
  *
  * Script Properties
  *  필수  GCP_PROJECT_ID, GCS_BUCKET (버킷 이름 또는 gs://버킷)
- *  선택  BATCH_LOCATION           기본 us-central1 (모델이 그 리전에 없으면 global 등으로 변경)
+ *  선택  BATCH_LOCATION           기본 global (gemini-3.5-flash 배치는 us-central1 미지원)
  *        BATCH_MODEL_ID           기본 gemini-3.5-flash
  *        BATCH_THINKING_LEVEL     기본 MEDIUM
  *        BATCH_ITEMS_PER_REQUEST  기본 50  (요청 1건에 담는 상품 수, 10~100)
@@ -56,7 +56,7 @@
  * ========================================================= */
 
 const BATCH_DEFAULTS = {
-  BATCH_LOCATION: "us-central1",
+  BATCH_LOCATION: "global",
   BATCH_MODEL_ID: "gemini-3.5-flash",
   BATCH_THINKING_LEVEL: "MEDIUM",
   BATCH_ITEMS_PER_REQUEST: 50,
