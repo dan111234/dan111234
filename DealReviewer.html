@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background-color: #f0f2f5; display: flex; flex-direction: column; height: 100vh; }
+    .header { background-color: #fff; padding: 10px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header h1 { margin: 0; font-size: 20px; color: #333; }
+    .header .title-wrap { display: flex; flex-direction: column; gap: 2px; }
+    .header .hint { font-size: 11px; color: #888; }
+    .controls { display: flex; align-items: center; gap: 12px; }
+    .toggle-switch { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .toggle-switch label { cursor: pointer; }
+    .release-btn { padding: 8px 16px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .release-btn:hover { background-color: #218838; }
+    .save-btn { padding: 8px 16px; background-color: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .save-btn:hover { background-color: #138496; }
+    .flush-btn { padding: 8px 16px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .flush-btn:hover { background-color: #c82333; }
+    .cancel-btn { padding: 8px 12px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px; }
+    .cancel-btn:hover { background-color: #5a6268; }
+    .main-content { flex-grow: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden; }
+    .product-info { width: 300px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; }
+    .graph-container { flex-grow: 1; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
+    .product-image { width: 100%; height: 260px; object-fit: contain; border-radius: 5px; margin-bottom: 15px; background-color: #fff; }
+    .product-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #111; max-height: 100px; overflow-y: auto; }
+
+    .label-status-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px; padding: 8px 10px;
+      border: 1px solid #eee; border-radius: 8px; background: #fafafa; font-size: 13px;
+    }
+    .label-badge { padding: 4px 10px; border-radius: 999px; font-weight: bold; border: 1px solid transparent; }
+    .badge-none { background: #f1f3f5; color: #495057; border-color: #e9ecef; }
+    .badge-good { background: #d3f9d8; color: #2b8a3e; border-color: #b2f2bb; }
+    .badge-bad  { background: #ffe3e3; color: #c92a2a; border-color: #ffc9c9; }
+
+    .stat { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0; border-bottom: 1px solid #eee; }
+    .stat-label { color: #555; }
+    .stat-value { font-weight: bold; color: #333; }
+    .vivid-red { background-color: #ffdddd; color: #d8000c; padding: 2px 6px; border-radius: 4px; }
+    .amazon-link { display: block; text-align: center; margin-top: 20px; padding: 10px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }
+    .amazon-link:hover { background-color: #0056b3; }
+    .navigation { display: flex; justify-content: space-between; margin-top: auto; align-items: center; }
+    .nav-btn { padding: 10px 20px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .nav-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+    .graph-img { max-width: 95%; max-height: 80%; object-fit: contain; transition: opacity 0.2s; }
+    .graph-controls { margin-top: 15px; display: flex; gap: 10px; align-items: center; }
+    .range-btn { padding: 5px 10px; border: 1px solid #ccc; background-color: #f8f9fa; border-radius: 5px; cursor: pointer; }
+    .range-btn.active { background-color: #007bff; color: white; border-color: #007bff; }
+    .range-note { font-size: 11px; color: #999; margin-left: 6px; }
+    .loader { font-size: 18px; color: #555; }
+    .preload-container { position: absolute; top: -9999px; left: -9999px; visibility: hidden; }
+    .preload-status { position: absolute; bottom: 8px; right: 12px; font-size: 11px; color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title-wrap">
+      <h1>Keepa Deal Reviewer</h1>
+      <!-- 서버(getDealsForReviewWithGraphs)에서 이미 걸러져서 내려온다 -->
+      <span class="hint">Deal Score &gt; 2.0 만 표시 · Keepa 그래프는 90일만 미리 불러옵니다</span>
+    </div>
+    <div class="controls">
+      <div class="toggle-switch">
+        <label for="deal-type">Non-Clothing</label>
+        <input type="checkbox" id="deal-type-toggle" onchange="loadDeals()">
+        <label for="deal-type">Clothing</label>
+      </div>
+      <button class="release-btn" onclick="releaseAndClose()">Release</button>
+      <button class="save-btn" onclick="saveLabels()">Save</button>
+      <button class="flush-btn" onclick="flushDeals()">Flush</button>
+      <button class="cancel-btn" onclick="cancelFlush()">Flush 취소</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="product-info">
+      <img id="product-image" class="product-image" src="https://placehold.co/300x300?text=Loading...">
+      <h2 id="product-title" class="product-title">Loading deals...</h2>
+
+      <div class="label-status-row">
+        <span>Label status</span>
+        <span id="label-badge" class="label-badge badge-none">Unlabeled</span>
+      </div>
+
+      <div class="stat">
+        <span class="stat-label">ASIN:</span>
+        <span id="asin" class="stat-value">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Current Price:</span>
+        <span id="current-price" class="stat-value">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Price Drop:</span>
+        <span id="price-drop" class="stat-value">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Deal Score:</span>
+        <span id="deal-score" class="stat-value">--</span>
+      </div>
+      <a id="amazon-link" class="amazon-link" href="#" target="_blank">View on Amazon</a>
+      <div class="navigation">
+        <button id="prev-btn" class="nav-btn" onclick="navigate(-1)" disabled>Previous</button>
+        <span id="position">0 / 0</span>
+        <button id="next-btn" class="nav-btn" onclick="navigate(1)" disabled>Next</button>
+      </div>
+    </div>
+
+    <div class="graph-container" id="graph-container">
+      <div id="graph-loader" class="loader">Loading graph...</div>
+      <img id="graph-img" class="graph-img" style="display: none;">
+      <div id="graph-controls" class="graph-controls" style="display: none;">
+        <button class="range-btn active" onclick="updateGraph(90)">90 Days</button>
+        <button class="range-btn" onclick="updateGraph(31)">31 Days</button>
+        <button class="range-btn" onclick="updateGraph(365)">365 Days</button>
+        <span class="range-note">31/365는 누를 때 불러옵니다</span>
+      </div>
+      <div id="preload-status" class="preload-status"></div>
+    </div>
+  </div>
+
+  <div class="preload-container" id="preload-container"></div>
+
+  <script>
+    let deals = [];
+    let currentIndex = 0;
+    let currentDealType = 'Non-Clothing Deals';
+    let currentGraphRange = 90;
+    let isNavigating = false;
+    let graphUrlCache = {};
+    let preloadedImages = {};
+    let isPreloading = false;
+
+    /* ──────────────────────────────────────────────────────────
+     * 지연 로딩 설정
+     *  - 이전: 전체 딜 × [90,31,365] 3개 range를 전부 미리 fetch
+     *          (500건이면 1,500회 Keepa graphimage 호출)
+     *  - 이후: 90일 1개 range만, 현재 위치 기준 앞쪽 일부만 미리 fetch
+     *          31/365는 사용자가 그 버튼을 눌렀을 때 그 1건만 불러온다
+     *  - 여기에 서버의 Deal Score > 2.0 필터가 더해져 대상 자체가 줄어든다
+     * ────────────────────────────────────────────────────────── */
+    const PRELOAD_RANGES = [90];   // 미리 받아둘 range
+    const PRELOAD_CHUNK = 8;       // 한 번에 받을 건수
+    const PRELOAD_LOOKAHEAD = 30;  // 현재 위치 기준 앞으로 몇 건까지
+    const PRELOAD_GAP_MS = 1200;   // 청크 사이 간격
+
+    // Persist labels locally
+    let labelStore = {};
+    function loadLabelStore() {
+      try { labelStore = JSON.parse(localStorage.getItem('keepaLabelStore') || '{}') || {}; }
+      catch(e) { labelStore = {}; }
+      if (!labelStore['Clothing Deals']) labelStore['Clothing Deals'] = {};
+      if (!labelStore['Non-Clothing Deals']) labelStore['Non-Clothing Deals'] = {};
+    }
+    function saveLabelStore() { localStorage.setItem('keepaLabelStore', JSON.stringify(labelStore)); }
+
+    /* === LABEL STATUS HELPERS === */
+    function getCurrentLabel() {
+      const deal = deals[currentIndex];
+      if (!deal || !deal.asin) return '';
+      const entry = (labelStore[currentDealType] && labelStore[currentDealType][deal.asin]) ? labelStore[currentDealType][deal.asin] : null;
+      return entry && entry.label ? entry.label : '';
+    }
+
+    function updateLabelBadge() {
+      const badge = document.getElementById('label-badge');
+      const label = getCurrentLabel();
+
+      badge.classList.remove('badge-none', 'badge-good', 'badge-bad');
+
+      if (label === 'Good') {
+        badge.textContent = 'Good';
+        badge.classList.add('badge-good');
+      } else if (label === 'Bad') {
+        badge.textContent = 'Bad';
+        badge.classList.add('badge-bad');
+      } else {
+        badge.textContent = 'Unlabeled';
+        badge.classList.add('badge-none');
+      }
+    }
+
+    function setLabelForCurrentDeal(labelValue) {
+      const deal = deals[currentIndex];
+      if (!deal || !deal.asin) return;
+
+      if (!labelStore[currentDealType]) labelStore[currentDealType] = {};
+      if (!labelStore[currentDealType][deal.asin]) labelStore[currentDealType][deal.asin] = {};
+
+      labelStore[currentDealType][deal.asin].label = labelValue;
+
+      const k90 = `${deal.asin}_90`;
+      if (graphUrlCache[k90]) {
+        labelStore[currentDealType][deal.asin].keepaUrl = graphUrlCache[k90];
+      }
+
+      saveLabelStore();
+      updateLabelBadge();
+    }
+
+    /**
+     * Ctrl+G / Ctrl+B + Arrow navigation
+     *  - e.key 대신 e.code 사용: 한글 입력 상태에서도 'KeyG' / 'KeyB'로 들어온다
+     *    (e.key는 'ㅎ' / 'ㅠ' / 'Process'로 들어와서 단축키가 무시됐었다)
+     *  - 체크박스(토글)에 포커스가 있어도 단축키가 동작하도록, 글자 입력 칸만 제외
+     *  - Mac의 Cmd도 허용
+     *  - 마지막 딜에서는 라벨만 찍고 이동하지 않는다
+     *  - capture 단계(true)로 등록해서 다른 요소보다 먼저 받는다
+     */
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      const tag = (t && t.tagName) ? t.tagName.toLowerCase() : '';
+      const type = (t && t.type) ? String(t.type).toLowerCase() : '';
+      const isTextInput = tag === 'textarea' ||
+        (tag === 'input' && !['checkbox', 'radio', 'button', 'submit'].includes(type));
+      if (isTextInput) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.code === 'KeyG' || e.code === 'KeyB')) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return; // 키를 누르고 있을 때 연속 실행 방지
+        setLabelForCurrentDeal(e.code === 'KeyG' ? 'Good' : 'Bad');
+        if (currentIndex < deals.length - 1) navigate(1);
+        return;
+      }
+
+      if (e.code === 'ArrowLeft' && currentIndex > 0) {
+        e.preventDefault();
+        navigate(-1);
+      }
+      if (e.code === 'ArrowRight' && currentIndex < deals.length - 1) {
+        e.preventDefault();
+        navigate(1);
+      }
+    }, true);
+
+    window.onload = () => {
+      loadLabelStore();
+      const savedState = localStorage.getItem('keepaReviewerState');
+      if (savedState) {
+        const { dealType, index } = JSON.parse(savedState);
+        currentDealType = dealType;
+        currentIndex = index;
+        document.getElementById('deal-type-toggle').checked = (currentDealType === 'Clothing Deals');
+      }
+      loadDeals(true);
+      // 다이얼로그가 열리자마자 키 입력을 받도록 포커스를 가져온다
+      // (안 그러면 시트가 키를 받아 Ctrl+B가 셀 굵게로 먹힌다)
+      window.focus();
+    };
+
+    function loadDeals(isInitialLoad = false) {
+      const toggle = document.getElementById('deal-type-toggle');
+      // 토글 클릭 후 포커스가 체크박스에 남지 않게 뺀다
+      toggle.blur();
+      const newDealType = toggle.checked ? 'Clothing Deals' : 'Non-Clothing Deals';
+
+      if (!isInitialLoad && newDealType !== currentDealType) {
+        currentIndex = 0;
+        graphUrlCache = {};
+        preloadedImages = {};
+        isPreloading = false;
+        document.getElementById('preload-container').innerHTML = '';
+      }
+      currentDealType = newDealType;
+
+      document.getElementById('product-title').textContent = `Loading ${currentDealType}...`;
+
+      google.script.run
+        .withSuccessHandler((loadedDeals) => {
+          try {
+            dealsWithGraphsLoaded(loadedDeals);
+          } catch (e) {
+            console.error('Client error in dealsWithGraphsLoaded:', e);
+            alert('Client error: ' + (e && e.message ? e.message : e));
+            displayNoDeals();
+          }
+        })
+        .withFailureHandler((err) => {
+          console.error('Backend error in getDealsForReviewWithGraphs:', err);
+          const msg = (err && err.message) ? err.message : (typeof err === 'string' ? err : JSON.stringify(err));
+          alert('Backend error (getDealsForReviewWithGraphs): ' + msg);
+          google.script.run
+            .withSuccessHandler((loadedDeals2) => {
+              try {
+                dealsLoaded(loadedDeals2);
+              } catch (e2) {
+                console.error('Client error in dealsLoaded:', e2);
+                alert('Client error: ' + (e2 && e2.message ? e2.message : e2));
+                displayNoDeals();
+              }
+            })
+            .withFailureHandler((err2) => {
+              console.error('Backend error in getDealsForReview:', err2);
+              const msg2 = (err2 && err2.message) ? err2.message : (typeof err2 === 'string' ? err2 : JSON.stringify(err2));
+              alert('Backend error (getDealsForReview): ' + msg2);
+              displayNoDeals();
+            })
+            .getDealsForReview(currentDealType);
+        })
+        .getDealsForReviewWithGraphs(currentDealType, 90);
+    }
+
+    /** URL 문자열 생성은 비용이 없으므로 3개 range 모두 만들어 둔다 (fetch는 안 함) */
+    function cacheGraphUrlsForDeal(asin, url90) {
+      if (!url90) return;
+      const baseUrl = String(url90).replace('range=90', '');
+      graphUrlCache[`${asin}_90`] = url90;
+      graphUrlCache[`${asin}_31`] = baseUrl + 'range=31';
+      graphUrlCache[`${asin}_365`] = baseUrl + 'range=365';
+    }
+
+    function dealsWithGraphsLoaded(loadedDeals) {
+      deals = loadedDeals || [];
+      if (deals.length > 0) {
+        if (currentIndex >= deals.length) currentIndex = deals.length - 1;
+        if (currentIndex < 0) currentIndex = 0;
+
+        deals.forEach((deal) => cacheGraphUrlsForDeal(deal.asin, deal.graphUrl));
+
+        navigate(currentIndex, true);
+        batchPreloadGraphs(currentIndex);
+      } else {
+        displayNoDeals();
+      }
+    }
+
+    function dealsLoaded(loadedDeals) {
+      deals = loadedDeals || [];
+      if (deals.length > 0) {
+        if (currentIndex >= deals.length) currentIndex = deals.length - 1;
+        if (currentIndex < 0) currentIndex = 0;
+
+        const asins = deals.map(d => d.asin);
+        google.script.run
+          .withSuccessHandler((urls) => {
+            if (urls && Array.isArray(urls)) {
+              urls.forEach((item) => cacheGraphUrlsForDeal(item.asin, item.url));
+            }
+            navigate(currentIndex, true);
+            batchPreloadGraphs(currentIndex);
+          })
+          .getBatchGraphImageUrls(asins, 90);
+      } else {
+        displayNoDeals();
+      }
+    }
+
+    function setPreloadStatus(text) {
+      const el = document.getElementById('preload-status');
+      if (el) el.textContent = text || '';
+    }
+
+    /**
+     * 90일 그래프만, 현재 위치 앞쪽 PRELOAD_LOOKAHEAD 건까지만 미리 받는다.
+     */
+    function batchPreloadGraphs(startIndex) {
+      if (isPreloading) return;
+      if (!deals.length) return;
+
+      const anchor = (currentIndex < 0) ? 0 : currentIndex;
+      const limit = Math.min(deals.length, anchor + PRELOAD_LOOKAHEAD);
+      const from = Math.max(startIndex, anchor);
+
+      if (from >= limit) { setPreloadStatus(''); return; }
+
+      isPreloading = true;
+
+      const preloadContainer = document.getElementById('preload-container');
+      const endIndex = Math.min(from + PRELOAD_CHUNK, limit);
+
+      let settled = 0;
+      const target = (endIndex - from) * PRELOAD_RANGES.length;
+
+      if (target === 0) { isPreloading = false; setPreloadStatus(''); return; }
+
+      setPreloadStatus(`그래프 미리 불러오는 중… ${from + 1}-${endIndex} / ${deals.length}`);
+
+      const done = () => {
+        settled++;
+        if (settled >= target) {
+          isPreloading = false;
+          if (endIndex >= limit) setPreloadStatus('');
+          else setTimeout(() => batchPreloadGraphs(endIndex), PRELOAD_GAP_MS);
+        }
+      };
+
+      for (let i = from; i < endIndex; i++) {
+        const deal = deals[i];
+        if (!deal) { done(); continue; }
+
+        PRELOAD_RANGES.forEach(range => {
+          const imgKey = `${deal.asin}_${range}`;
+          if (!preloadedImages[imgKey] && graphUrlCache[imgKey]) {
+            const img = new Image();
+            img.onload = () => { preloadedImages[imgKey] = true; done(); };
+            img.onerror = done;
+            img.src = graphUrlCache[imgKey];
+            preloadContainer.appendChild(img);
+          } else {
+            done();
+          }
+        });
+      }
+    }
+
+    function displayNoDeals() {
+      currentIndex = -1;
+      document.getElementById('product-image').src = 'https://placehold.co/300x300?text=No+Deals';
+      document.getElementById('product-title').textContent =
+        `"${currentDealType}"에 Deal Score 2.0 초과인 딜이 없습니다.`;
+      document.getElementById('asin').textContent = '--';
+      document.getElementById('current-price').textContent = '--';
+      document.getElementById('price-drop').textContent = '--';
+      document.getElementById('deal-score').textContent = '--';
+      document.getElementById('amazon-link').href = '#';
+      document.getElementById('position').textContent = `0 / 0`;
+      document.getElementById('prev-btn').disabled = true;
+      document.getElementById('next-btn').disabled = true;
+      document.getElementById('graph-loader').textContent = 'No deals to display.';
+      document.getElementById('graph-loader').style.display = 'block';
+      document.getElementById('graph-img').style.display = 'none';
+      document.getElementById('graph-controls').style.display = 'none';
+      setPreloadStatus('');
+
+      updateLabelBadge();
+    }
+
+    /**
+     * 인덱스를 0 ~ deals.length-1 범위로 고정한다.
+     * (이전: 마지막 딜에서 Ctrl+G를 누르면 currentIndex가 deals.length 이상으로 넘어가서
+     *  라벨이 안 찍히고, ←를 눌러도 엉뚱한 위치로 갔다)
+     */
+    function navigate(direction, absolute = false) {
+      if (isNavigating) return;
+      if (!deals.length) return;
+      isNavigating = true;
+
+      let next = absolute ? direction : currentIndex + direction;
+      next = Math.max(0, Math.min(next, deals.length - 1));
+
+      // 끝에 닿아 위치가 그대로면 다시 그리지 않는다
+      if (!absolute && next === currentIndex) {
+        isNavigating = false;
+        return;
+      }
+
+      currentIndex = next;
+      displayDeal(deals[currentIndex]);
+      localStorage.setItem('keepaReviewerState', JSON.stringify({ dealType: currentDealType, index: currentIndex }));
+      // 이동한 위치 기준으로 앞쪽을 계속 채운다
+      batchPreloadGraphs(currentIndex);
+
+      setTimeout(() => { isNavigating = false; }, 100);
+    }
+
+    function displayDeal(deal) {
+      document.getElementById('product-image').src = deal.imageUrl;
+      document.getElementById('product-title').textContent = deal.title;
+      document.getElementById('amazon-link').href = deal.amazonLink;
+      document.getElementById('asin').textContent = deal.asin;
+      const currentPriceNum = Number(deal.currentPrice) || 0;
+      document.getElementById('current-price').textContent = `$${currentPriceNum.toFixed(2)}`;
+
+      const priceDropSpan = document.getElementById('price-drop');
+      const dealScoreSpan = document.getElementById('deal-score');
+
+      const priceDropNum = Number(deal.priceDrop) || 0;
+      const dealScoreNum = Number(deal.dealScore) || 0;
+      const priceDropPercent = priceDropNum * 100;
+      priceDropSpan.textContent = `${priceDropPercent.toFixed(2)}%`;
+      dealScoreSpan.textContent = dealScoreNum.toFixed(2);
+
+      priceDropSpan.classList.toggle('vivid-red', priceDropPercent < -50);
+      dealScoreSpan.classList.toggle('vivid-red', dealScoreNum > 2);
+
+      updateNavButtons();
+      updateGraph(currentGraphRange);
+
+      updateLabelBadge();
+    }
+
+    function updateNavButtons() {
+      document.getElementById('position').textContent = `${currentIndex + 1} / ${deals.length}`;
+      document.getElementById('prev-btn').disabled = currentIndex <= 0;
+      document.getElementById('next-btn').disabled = currentIndex >= deals.length - 1;
+    }
+
+    /**
+     * 31/365는 프리로드하지 않으므로 여기서 처음 fetch된다.
+     * (이미 있던 로더 분기가 그대로 그 역할을 한다)
+     */
+    function updateGraph(range) {
+      currentGraphRange = range;
+      const deal = deals[currentIndex];
+      if (!deal) return;
+
+      document.querySelectorAll('.range-btn').forEach(btn => btn.classList.remove('active'));
+      const activeButton = Array.from(document.querySelectorAll('.range-btn')).find(btn => btn.textContent.includes(range));
+      if (activeButton) activeButton.classList.add('active');
+
+      const cacheKey = `${deal.asin}_${range}`;
+      const img = document.getElementById('graph-img');
+      const loader = document.getElementById('graph-loader');
+
+      if (graphUrlCache[cacheKey]) {
+        if (preloadedImages[cacheKey]) {
+          loader.style.display = 'none';
+          img.src = graphUrlCache[cacheKey];
+          img.style.display = 'block';
+          document.getElementById('graph-controls').style.display = 'flex';
+        } else {
+          loader.style.display = 'block';
+          loader.textContent = (range === 90) ? 'Loading graph...' : `${range}일 그래프 불러오는 중...`;
+          img.style.display = 'none';
+
+          img.onload = () => {
+            loader.style.display = 'none';
+            img.style.display = 'block';
+            preloadedImages[cacheKey] = true;
+          };
+          img.onerror = () => { loader.textContent = 'Failed to load graph'; };
+          img.src = graphUrlCache[cacheKey];
+          document.getElementById('graph-controls').style.display = 'flex';
+        }
+      } else {
+        loader.style.display = 'block';
+        loader.textContent = 'Graph URL not available';
+        img.style.display = 'none';
+      }
+    }
+
+    function saveLabels() {
+      loadLabelStore();
+      google.script.run
+        .withSuccessHandler((summary) => {
+          const c = summary && summary["Clothing Deals"] ? summary["Clothing Deals"] : null;
+          const n = summary && summary["Non-Clothing Deals"] ? summary["Non-Clothing Deals"] : null;
+
+          const msg =
+            `Saved.\n\n` +
+            `Clothing Deals -> Label=K (11), Keepa Graph Url=L (12) | ok=${c ? c.ok : 'n/a'}\n` +
+            `Non-Clothing Deals -> Label=K (11), Keepa Graph Url=L (12) | ok=${n ? n.ok : 'n/a'}`;
+
+          alert(msg);
+        })
+        .withFailureHandler((err) => alert('❌ 저장 실패: ' + (err && err.message ? err.message : err)))
+        .saveDealLabels(labelStore);
+    }
+
+    function flushDeals() {
+      const ok = confirm(
+        `"${currentDealType}"를 1시간 뒤에 Flush합니다.\n\n` +
+        `· Deal Score 2.0 초과 → Keepa 그래프를 Drive로 옮긴 뒤 Archive로 이동\n` +
+        `· Deal Score 2.0 이하 → Drive 변환 없이 행 삭제\n\n` +
+        `진행할까요?`
+      );
+      if (!ok) return;
+
+      google.script.run
+        .withSuccessHandler((msg) => alert(msg))
+        .withFailureHandler((err) => alert('❌ Failed to schedule flush: ' + (err && err.message ? err.message : err)))
+        .scheduleFlushInOneHour(currentDealType);
+    }
+
+    /** 예약해둔 Flush를 취소한다 */
+    function cancelFlush() {
+      google.script.run
+        .withSuccessHandler((msg) => alert(msg))
+        .withFailureHandler((err) => alert('❌ 취소 실패: ' + (err && err.message ? err.message : err)))
+        .cancelScheduledFlush(currentDealType);
+    }
+
+    function releaseAndClose() {
+      if (confirm('Are you sure you want to release processing and close the reviewer?')) {
+        google.script.run.withSuccessHandler(() => {
+          google.script.host.close();
+        }).releaseProcessing(false);
+      }
+    }
+  </script>
+</body>
+</html>
