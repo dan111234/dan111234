@@ -151,22 +151,53 @@
     const PRELOAD_LOOKAHEAD = 30;  // 현재 위치 기준 앞으로 몇 건까지
     const PRELOAD_GAP_MS = 1200;   // 청크 사이 간격
 
-    // Persist labels locally
+    /**
+     * 라벨 로컬 저장 (localStorage)
+     *  - 예전 코드는 라벨마다 Keepa URL(API 키 포함 긴 문자열)까지 저장해서
+     *    쌓이다 보면 localStorage 용량(약 5MB)을 넘었다.
+     *    그러면 setItem이 에러를 던져 배지 갱신과 다음 딜 이동이 통째로 멈췄다.
+     *  - 이제 라벨만 저장한다 (Keepa URL은 Save 때 서버가 다시 만든다)
+     *  - 저장이 실패해도 메모리에는 남아 있고, 화면 이동은 절대 막지 않는다
+     */
     let labelStore = {};
+    function compactLabelStore_() {
+      Object.keys(labelStore).forEach(type => {
+        const bucket = labelStore[type];
+        if (!bucket || typeof bucket !== 'object') { delete labelStore[type]; return; }
+        Object.keys(bucket).forEach(asin => {
+          const e = bucket[asin];
+          if (!e || !e.label) delete bucket[asin];
+          else bucket[asin] = { label: e.label };
+        });
+      });
+    }
     function loadLabelStore() {
       try { labelStore = JSON.parse(localStorage.getItem('keepaLabelStore') || '{}') || {}; }
       catch(e) { labelStore = {}; }
       if (!labelStore['Clothing Deals']) labelStore['Clothing Deals'] = {};
       if (!labelStore['Non-Clothing Deals']) labelStore['Non-Clothing Deals'] = {};
+      compactLabelStore_();
+      saveLabelStore(); // 줄어든 크기로 다시 써서 용량 확보
     }
-    function saveLabelStore() { localStorage.setItem('keepaLabelStore', JSON.stringify(labelStore)); }
+    function saveLabelStore() {
+      try {
+        localStorage.setItem('keepaLabelStore', JSON.stringify(labelStore));
+        return true;
+      } catch (e) {
+        console.error('labelStore 저장 실패:', e);
+        setKeyStatus('⚠ 라벨 임시저장 실패 (브라우저 저장공간). 창을 닫기 전에 Save를 눌러주세요', 'warn');
+        return false;
+      }
+    }
 
     /* === LABEL STATUS HELPERS === */
     function getCurrentLabel() {
       const deal = deals[currentIndex];
       if (!deal || !deal.asin) return '';
       const entry = (labelStore[currentDealType] && labelStore[currentDealType][deal.asin]) ? labelStore[currentDealType][deal.asin] : null;
-      return entry && entry.label ? entry.label : '';
+      if (entry && entry.label) return entry.label;
+      // 이미 Save해서 시트(K열)에 들어간 라벨도 보여준다
+      return deal.label ? String(deal.label) : '';
     }
 
     function updateLabelBadge() {
@@ -194,15 +225,11 @@
       if (!labelStore[currentDealType]) labelStore[currentDealType] = {};
       if (!labelStore[currentDealType][deal.asin]) labelStore[currentDealType][deal.asin] = {};
 
-      labelStore[currentDealType][deal.asin].label = labelValue;
+      labelStore[currentDealType][deal.asin] = { label: labelValue };
 
-      const k90 = `${deal.asin}_90`;
-      if (graphUrlCache[k90]) {
-        labelStore[currentDealType][deal.asin].keepaUrl = graphUrlCache[k90];
-      }
-
-      saveLabelStore();
+      // 화면 먼저 갱신하고, 로컬 저장은 그 다음 (실패해도 이동을 막지 않음)
       updateLabelBadge();
+      saveLabelStore();
     }
 
     /**
@@ -251,7 +278,8 @@
 
     window.onload = () => {
       loadLabelStore();
-      const savedState = localStorage.getItem('keepaReviewerState');
+      let savedState = null;
+      try { savedState = localStorage.getItem('keepaReviewerState'); } catch (e) {}
       if (savedState) {
         const { dealType, index } = JSON.parse(savedState);
         currentDealType = dealType;
@@ -471,6 +499,8 @@
       if (isNavigating) return;
       if (!deals.length) return;
       isNavigating = true;
+      // 아래에서 에러가 나도 잠금이 영원히 걸리지 않도록 먼저 예약
+      setTimeout(() => { isNavigating = false; }, 100);
 
       let next = absolute ? direction : currentIndex + direction;
       next = Math.max(0, Math.min(next, deals.length - 1));
@@ -483,11 +513,11 @@
 
       currentIndex = next;
       displayDeal(deals[currentIndex]);
-      localStorage.setItem('keepaReviewerState', JSON.stringify({ dealType: currentDealType, index: currentIndex }));
+      try {
+        localStorage.setItem('keepaReviewerState', JSON.stringify({ dealType: currentDealType, index: currentIndex }));
+      } catch (e) { console.error('위치 저장 실패:', e); }
       // 이동한 위치 기준으로 앞쪽을 계속 채운다
       batchPreloadGraphs(currentIndex);
-
-      setTimeout(() => { isNavigating = false; }, 100);
     }
 
     function displayDeal(deal) {
@@ -567,7 +597,8 @@
     }
 
     function saveLabels() {
-      loadLabelStore();
+      // 메모리의 labelStore가 최신이다. 예전처럼 localStorage에서 다시 읽으면
+      // 저장에 실패했던 라벨이 사라지므로 다시 읽지 않는다.
       google.script.run
         .withSuccessHandler((summary) => {
           const c = summary && summary["Clothing Deals"] ? summary["Clothing Deals"] : null;
