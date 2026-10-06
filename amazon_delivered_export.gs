@@ -19,7 +19,12 @@ const CONFIG = {
 
   // AI agent 트리거 코드네임 (이 코드가 제목에 있으면 작업 시작)
   AGENT_CODE_READY: 'AMZ-DLV-READY',
-  AGENT_CODE_FAILED: 'AMZ-DLV-FAILED'
+  AGENT_CODE_FAILED: 'AMZ-DLV-FAILED',
+
+  // 테스트 샘플 (testRunAmazonExportWindow)
+  TEST_WINDOW_START: '2026-09-22', // 포함
+  TEST_WINDOW_END: '2026-10-06',   // 포함 (해당 날짜 23:59:59까지)
+  TEST_SHEET_NAME: 'Amazon_Delivered_TEST'
 };
 
 
@@ -55,19 +60,65 @@ function runScheduledAmazonExport() {
   }
 }
 
+/**
+ * 테스트 샘플: TEST_WINDOW_START ~ TEST_WINDOW_END 기간에 받은 Delivered 메일만
+ * TEST_SHEET_NAME 탭에 내보내고, [TEST] 표시가 붙은 알림 메일을 발송.
+ * 편집기에서 직접 실행하세요. (정기 트리거와는 무관)
+ */
+function testRunAmazonExportWindow() {
+  const runId = `TEST-${buildRunId_()}`;
+  const tz = Session.getScriptTimeZone();
+
+  const startDate = Utilities.parseDate(`${CONFIG.TEST_WINDOW_START} 00:00:00`, tz, 'yyyy-MM-dd HH:mm:ss');
+  const endDate = Utilities.parseDate(`${CONFIG.TEST_WINDOW_END} 00:00:00`, tz, 'yyyy-MM-dd HH:mm:ss');
+  endDate.setDate(endDate.getDate() + 1); // 종료일 포함 → 다음날 0시 미만
+
+  const options = {
+    sheetName: CONFIG.TEST_SHEET_NAME,
+    startDate: startDate,
+    endDate: endDate
+  };
+
+  try {
+    const result = exportAmazonDeliveredEmailsToSheet(options);
+    result.window = `${CONFIG.TEST_WINDOW_START} ~ ${CONFIG.TEST_WINDOW_END} (${tz})`;
+    sendAgentReadyEmail_(runId, result, true);
+  } catch (e) {
+    sendAgentFailedEmail_(runId, e, true);
+    throw e;
+  }
+}
+
 
 /***********************
  * Export
  ***********************/
 
-function exportAmazonDeliveredEmailsToSheet() {
+/**
+ * @param {Object} [options]
+ * @param {string} [options.sheetName] 기본값 CONFIG.SHEET_NAME
+ * @param {Date} [options.startDate] 지정 시 이 시각 이후 수신 메일만 (포함)
+ * @param {Date} [options.endDate] 지정 시 이 시각 이전 수신 메일만 (미포함)
+ */
+function exportAmazonDeliveredEmailsToSheet(options) {
+  const opts = options || {};
+  const startDate = opts.startDate || null;
+  const endDate = opts.endDate || null;
+
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
-  const sheet = getOrCreateSheet_(ss, CONFIG.SHEET_NAME);
+  const sheet = getOrCreateSheet_(ss, opts.sheetName || CONFIG.SHEET_NAME);
+
+  const dateTerms = (startDate || endDate)
+    ? [
+        startDate ? `after:${Math.floor(startDate.getTime() / 1000)}` : '',
+        endDate ? `before:${Math.floor(endDate.getTime() / 1000)}` : ''
+      ].filter(Boolean)
+    : [`newer_than:${CONFIG.DAYS_BACK}d`];
 
   const query = [
     'in:inbox',
     `from:${CONFIG.FROM_EMAIL}`,
-    `newer_than:${CONFIG.DAYS_BACK}d`,
+    ...dateTerms,
     'subject:Delivered'
   ].join(' ');
 
@@ -83,6 +134,11 @@ function exportAmazonDeliveredEmailsToSheet() {
 
       if (!isFromAmazonOrderUpdate_(from)) return;
       if (!subject.startsWith(CONFIG.SUBJECT_PREFIX)) return;
+
+      // 스레드 안에 기간 밖 메시지가 섞여 있을 수 있어 메시지 단위로 한 번 더 거름
+      const receivedAt = message.getDate();
+      if (startDate && receivedAt < startDate) return;
+      if (endDate && receivedAt >= endDate) return;
 
       const htmlBody = message.getBody() || '';
       const plainBody = message.getPlainBody() || '';
@@ -149,8 +205,9 @@ function exportAmazonDeliveredEmailsToSheet() {
  * Agent notification
  ***********************/
 
-function sendAgentReadyEmail_(runId, result) {
-  const subject = `[${CONFIG.AGENT_CODE_READY}] 처리 필요 - ${result.sheetName} (${runId})`;
+function sendAgentReadyEmail_(runId, result, isTest) {
+  const testTag = isTest ? ' [TEST]' : '';
+  const subject = `[${CONFIG.AGENT_CODE_READY}]${testTag} 처리 필요 - ${result.sheetName} (${runId})`;
 
   const body = [
     'Amazon Delivered 시트가 갱신되었습니다. 처리가 필요합니다.',
@@ -162,6 +219,8 @@ function sendAgentReadyEmail_(runId, result) {
     `SPREADSHEET_ID: ${CONFIG.SPREADSHEET_ID}`,
     `SHEET_NAME: ${result.sheetName}`,
     `ROW_COUNT: ${result.rowCount}`,
+    `MODE: ${isTest ? 'TEST' : 'SCHEDULED'}`,
+    ...(result.window ? [`WINDOW: ${result.window}`] : []),
     `EXPORTED_AT: ${formatNow_()}`,
     '----- END -----'
   ].join('\n');
@@ -169,8 +228,10 @@ function sendAgentReadyEmail_(runId, result) {
   GmailApp.sendEmail(CONFIG.NOTIFY_EMAIL, subject, body);
 }
 
-function sendAgentFailedEmail_(runId, error) {
-  const subject = `[${CONFIG.AGENT_CODE_FAILED}] 실행 실패 - ${CONFIG.SHEET_NAME} (${runId})`;
+function sendAgentFailedEmail_(runId, error, isTest) {
+  const testTag = isTest ? ' [TEST]' : '';
+  const sheetName = isTest ? CONFIG.TEST_SHEET_NAME : CONFIG.SHEET_NAME;
+  const subject = `[${CONFIG.AGENT_CODE_FAILED}]${testTag} 실행 실패 - ${sheetName} (${runId})`;
 
   const body = [
     'Amazon Delivered 시트 갱신 중 오류가 발생했습니다. 작업을 시작하지 마세요.',
@@ -178,7 +239,8 @@ function sendAgentFailedEmail_(runId, error) {
     '----- AGENT TASK -----',
     `AGENT_CODE: ${CONFIG.AGENT_CODE_FAILED}`,
     `RUN_ID: ${runId}`,
-    `SHEET_NAME: ${CONFIG.SHEET_NAME}`,
+    `SHEET_NAME: ${sheetName}`,
+    `MODE: ${isTest ? 'TEST' : 'SCHEDULED'}`,
     `ERROR: ${error && error.message ? error.message : error}`,
     `FAILED_AT: ${formatNow_()}`,
     '----- END -----'
