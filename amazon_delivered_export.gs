@@ -10,9 +10,9 @@ const CONFIG = {
   SHEET_NAME: 'Amazon_Delivered',
   FROM_EMAIL: 'order-update@amazon.com',
   SUBJECT_PREFIX: 'Delivered:',
-  DAYS_BACK: 30,
 
   // 스케줄 / 알림
+  // 실행 주기 = 수집 기간. 매 실행 시 "실행일 전날까지의 최근 N일" (날짜 단위, 겹침/누락 없음)
   RUN_EVERY_DAYS: 10,
   RUN_AT_HOUR: 9,
   NOTIFY_EMAIL: 'amzmaster2368@gmail.com',
@@ -22,7 +22,7 @@ const CONFIG = {
   AGENT_CODE_FAILED: 'AMZ-DLV-FAILED',
 
   // 테스트 샘플 (testRunAmazonExportWindow)
-  TEST_WINDOW_START: '2026-09-22', // 포함
+  // 이 날짜를 마지막 날로 하는 RUN_EVERY_DAYS일 기간을 정기 실행과 동일하게 처리
   TEST_WINDOW_END: '2026-10-06',   // 포함 (해당 날짜 23:59:59까지)
   TEST_SHEET_NAME: 'Amazon_Delivered_TEST'
 };
@@ -51,8 +51,15 @@ function setupScheduledTrigger() {
 function runScheduledAmazonExport() {
   const runId = buildRunId_();
 
+  // 오늘 0시 기준 직전 RUN_EVERY_DAYS일 (예: 10/16 실행 → 10/06 ~ 10/15)
+  const window = buildWindow_(startOfToday_());
+
   try {
-    const result = exportAmazonDeliveredEmailsToSheet();
+    const result = exportAmazonDeliveredEmailsToSheet({
+      startDate: window.startDate,
+      endDate: window.endDate
+    });
+    result.window = window.label;
     sendAgentReadyEmail_(runId, result);
   } catch (e) {
     sendAgentFailedEmail_(runId, e);
@@ -61,32 +68,61 @@ function runScheduledAmazonExport() {
 }
 
 /**
- * 테스트 샘플: TEST_WINDOW_START ~ TEST_WINDOW_END 기간에 받은 Delivered 메일만
+ * 테스트 샘플: TEST_WINDOW_END 를 마지막 날로 하는 RUN_EVERY_DAYS일 기간
+ * (정기 실행과 동일한 range, 기본값 09/27 ~ 10/06) 의 Delivered 메일만
  * TEST_SHEET_NAME 탭에 내보내고, [TEST] 표시가 붙은 알림 메일을 발송.
  * 편집기에서 직접 실행하세요. (정기 트리거와는 무관)
  */
 function testRunAmazonExportWindow() {
   const runId = `TEST-${buildRunId_()}`;
-  const tz = Session.getScriptTimeZone();
 
-  const startDate = Utilities.parseDate(`${CONFIG.TEST_WINDOW_START} 00:00:00`, tz, 'yyyy-MM-dd HH:mm:ss');
-  const endDate = Utilities.parseDate(`${CONFIG.TEST_WINDOW_END} 00:00:00`, tz, 'yyyy-MM-dd HH:mm:ss');
-  endDate.setDate(endDate.getDate() + 1); // 종료일 포함 → 다음날 0시 미만
-
-  const options = {
-    sheetName: CONFIG.TEST_SHEET_NAME,
-    startDate: startDate,
-    endDate: endDate
-  };
+  const endExclusive = parseDay_(CONFIG.TEST_WINDOW_END);
+  endExclusive.setDate(endExclusive.getDate() + 1); // 종료일 포함 → 다음날 0시 미만
+  const window = buildWindow_(endExclusive);
 
   try {
-    const result = exportAmazonDeliveredEmailsToSheet(options);
-    result.window = `${CONFIG.TEST_WINDOW_START} ~ ${CONFIG.TEST_WINDOW_END} (${tz})`;
+    const result = exportAmazonDeliveredEmailsToSheet({
+      sheetName: CONFIG.TEST_SHEET_NAME,
+      startDate: window.startDate,
+      endDate: window.endDate
+    });
+    result.window = window.label;
     sendAgentReadyEmail_(runId, result, true);
   } catch (e) {
     sendAgentFailedEmail_(runId, e, true);
     throw e;
   }
+}
+
+/**
+ * endExclusive(0시) 직전 RUN_EVERY_DAYS일 기간. startDate 포함, endDate 미포함.
+ */
+function buildWindow_(endExclusive) {
+  const endDate = new Date(endExclusive.getTime());
+  const startDate = new Date(endExclusive.getTime());
+  startDate.setDate(startDate.getDate() - CONFIG.RUN_EVERY_DAYS);
+
+  const lastDay = new Date(endExclusive.getTime());
+  lastDay.setDate(lastDay.getDate() - 1);
+
+  const tz = Session.getScriptTimeZone();
+  const fmt = d => Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+
+  return {
+    startDate: startDate,
+    endDate: endDate,
+    label: `${fmt(startDate)} ~ ${fmt(lastDay)} (${CONFIG.RUN_EVERY_DAYS}일, ${tz})`
+  };
+}
+
+function startOfToday_() {
+  const tz = Session.getScriptTimeZone();
+  return parseDay_(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'));
+}
+
+function parseDay_(yyyyMmDd) {
+  const tz = Session.getScriptTimeZone();
+  return Utilities.parseDate(`${yyyyMmDd} 00:00:00`, tz, 'yyyy-MM-dd HH:mm:ss');
 }
 
 
@@ -97,23 +133,23 @@ function testRunAmazonExportWindow() {
 /**
  * @param {Object} [options]
  * @param {string} [options.sheetName] 기본값 CONFIG.SHEET_NAME
- * @param {Date} [options.startDate] 지정 시 이 시각 이후 수신 메일만 (포함)
- * @param {Date} [options.endDate] 지정 시 이 시각 이전 수신 메일만 (미포함)
+ * @param {Date} [options.startDate] 이 시각 이후 수신 메일만 (포함)
+ * @param {Date} [options.endDate] 이 시각 이전 수신 메일만 (미포함)
+ * 기간 미지정 시 정기 실행과 동일한 최근 RUN_EVERY_DAYS일 기간 사용
  */
 function exportAmazonDeliveredEmailsToSheet(options) {
   const opts = options || {};
-  const startDate = opts.startDate || null;
-  const endDate = opts.endDate || null;
+  const defaultWindow = (opts.startDate || opts.endDate) ? null : buildWindow_(startOfToday_());
+  const startDate = opts.startDate || (defaultWindow && defaultWindow.startDate) || null;
+  const endDate = opts.endDate || (defaultWindow && defaultWindow.endDate) || null;
 
   const ss = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   const sheet = getOrCreateSheet_(ss, opts.sheetName || CONFIG.SHEET_NAME);
 
-  const dateTerms = (startDate || endDate)
-    ? [
-        startDate ? `after:${Math.floor(startDate.getTime() / 1000)}` : '',
-        endDate ? `before:${Math.floor(endDate.getTime() / 1000)}` : ''
-      ].filter(Boolean)
-    : [`newer_than:${CONFIG.DAYS_BACK}d`];
+  const dateTerms = [
+    startDate ? `after:${Math.floor(startDate.getTime() / 1000)}` : '',
+    endDate ? `before:${Math.floor(endDate.getTime() / 1000)}` : ''
+  ].filter(Boolean);
 
   const query = [
     'in:inbox',
