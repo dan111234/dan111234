@@ -21,8 +21,8 @@ const CONFIG = {
   AGENT_CODE_READY: 'AMZ-DLV-READY',
   AGENT_CODE_FAILED: 'AMZ-DLV-FAILED',
 
-  // 테스트 샘플 (testRunAmazonExportWindow)
-  // 이 날짜를 마지막 날로 하는 RUN_EVERY_DAYS일 기간을 정기 실행과 동일하게 처리
+  // 테스트 샘플 (testRunAmazonExportWindow) - 아래 기간 전체를 한 번에 처리
+  TEST_WINDOW_START: '2026-09-22', // 포함
   TEST_WINDOW_END: '2026-10-06',   // 포함 (해당 날짜 23:59:59까지)
   TEST_SHEET_NAME: 'Amazon_Delivered_TEST'
 };
@@ -68,17 +68,19 @@ function runScheduledAmazonExport() {
 }
 
 /**
- * 테스트 샘플: TEST_WINDOW_END 를 마지막 날로 하는 RUN_EVERY_DAYS일 기간
- * (정기 실행과 동일한 range, 기본값 09/27 ~ 10/06) 의 Delivered 메일만
- * TEST_SHEET_NAME 탭에 내보내고, [TEST] 표시가 붙은 알림 메일을 발송.
+ * 테스트 샘플: TEST_WINDOW_START ~ TEST_WINDOW_END 기간 전체(기본값 09/22 ~ 10/06)를
+ * 한 번에 TEST_SHEET_NAME 탭에 내보내고, [TEST] 표시가 붙은 알림 메일을 발송.
  * 편집기에서 직접 실행하세요. (정기 트리거와는 무관)
  */
 function testRunAmazonExportWindow() {
   const runId = `TEST-${buildRunId_()}`;
 
+  const startDate = parseDay_(CONFIG.TEST_WINDOW_START);
   const endExclusive = parseDay_(CONFIG.TEST_WINDOW_END);
   endExclusive.setDate(endExclusive.getDate() + 1); // 종료일 포함 → 다음날 0시 미만
-  const window = buildWindow_(endExclusive);
+
+  const days = Math.round((endExclusive.getTime() - startDate.getTime()) / 86400000);
+  const window = buildWindow_(endExclusive, days);
 
   try {
     const result = exportAmazonDeliveredEmailsToSheet({
@@ -95,12 +97,13 @@ function testRunAmazonExportWindow() {
 }
 
 /**
- * endExclusive(0시) 직전 RUN_EVERY_DAYS일 기간. startDate 포함, endDate 미포함.
+ * endExclusive(0시) 직전 days일(기본 RUN_EVERY_DAYS) 기간. startDate 포함, endDate 미포함.
  */
-function buildWindow_(endExclusive) {
+function buildWindow_(endExclusive, days) {
+  const dayCount = days || CONFIG.RUN_EVERY_DAYS;
   const endDate = new Date(endExclusive.getTime());
   const startDate = new Date(endExclusive.getTime());
-  startDate.setDate(startDate.getDate() - CONFIG.RUN_EVERY_DAYS);
+  startDate.setDate(startDate.getDate() - dayCount);
 
   const lastDay = new Date(endExclusive.getTime());
   lastDay.setDate(lastDay.getDate() - 1);
@@ -111,7 +114,7 @@ function buildWindow_(endExclusive) {
   return {
     startDate: startDate,
     endDate: endDate,
-    label: `${fmt(startDate)} ~ ${fmt(lastDay)} (${CONFIG.RUN_EVERY_DAYS}일, ${tz})`
+    label: `${fmt(startDate)} ~ ${fmt(lastDay)} (${dayCount}일, ${tz})`
   };
 }
 
