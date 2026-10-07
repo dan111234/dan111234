@@ -32,14 +32,17 @@
  *      날짜 경계와 서머타임으로 인한 오매칭 위험을 제거한다.
  *
  * [2026-10 수정 사항]
- * 6) 실리가드 아마존 폐기 수량을 Amazon Return 탭의 UNSELLABLE 수량 기준으로 변경
- *    - 기존: 폐기 = transactions 환불 수량 - Amazon Return SELLABLE 수량
- *      (환불만 되고 아직 반품 입고되지 않은 수량까지 폐기로 잡히는 문제)
- *    - 변경: 폐기 = Amazon Return에서 detailed-disposition이 SELLABLE이 아닌 수량
- *      (CUSTOMER_DAMAGED, CARRIER_DAMAGED, DEFECTIVE 등)
- *    - 판매 출고 = 주문 수량 - Amazon Return 실제 반품 수량(SELLABLE + UNSELLABLE)
- *      → 총 출고(판매+폐기) = 주문 - SELLABLE 반품으로 기존과 동일하게 유지되어 기말 재고는 변하지 않고,
- *        환불만 되고 반품되지 않은 수량은 폐기가 아닌 판매 출고로 남는다.
+ * 6) (철회) 실리가드 아마존 폐기를 Amazon Return UNSELLABLE 기준으로 바꿨던 변경을 되돌림
+ *    - UNSELLABLE 기준은 판매 출고 = 주문 - 실제 반품 수량이 되어, 환불을 수량 -로 입력하는
+ *      이카운트(아마존_결과)와 판매 출고가 어긋났다(2026-09 실리가드 4품목 합계 30개 차이).
+ *    - 다시 판매 출고 = 주문 - 환불, 폐기 = 환불 - SELLABLE 반품으로 계산한다. 기말 재고는 두 방식이 같다.
+ *    - 주문 없이 환불만 있는 실리가드 품목도 판매 출고에서 환불을 차감하도록 보완했다.
+ * 7) 수불대장 Shopify 반품 누락 수정
+ *    - 기존에는 return 탭을 행 단위로 보고 주문당 첫 행만 처리해서, 첫 행이 SKU 빈 행이면
+ *      품목을 못 찾은 채 주문이 처리 완료로 표시되어 반품이 통째로 빠졌다
+ *      (2026-09 #18896 오토프로X, #18377 칼럼 기어노브).
+ *    - 결과보고서와 같은 함수(aggregateShopifyReturnsByOrder_, resolveShopifyReturnItem_)로
+ *      주문 단위 순 반품액과 품목을 판정한다.
  */
 
 function onOpen() {
@@ -72,8 +75,7 @@ const CONFIG = {
  * 수불대장 업데이트 프로세스
  * - lastmonthfinalinventorystatement 기준
  * - 기초 / 입고 / 출고(판매/폐기) / 재고 구조로 생성
- * - Amazon Return 탭은 SILIGUARD의 반품 수량 기준으로 사용:
- *   UNSELLABLE(SELLABLE 이외) 수량은 폐기, 실제 반품 수량(SELLABLE+UNSELLABLE)은 판매 출고 차감분
+ * - Amazon Return 탭은 SILIGUARD의 SELLABLE 수량을 폐기(= 환불 - SELLABLE) 차감분으로만 사용
  * - 아마존 트랜잭션 중 주문ID가 "S"로 시작하는 실리가드 주문은 인플루언서 샘플 발송으로 보고,
  *   sales 탭에 동일 SKU/수량 주문이 UTC 기준 24시간 이내에 없을 때만 0원 판매로 반영한다.
  */
@@ -146,23 +148,20 @@ function buildInventoryStatement_() {
   // 2) Shopify Return:
   // - 자사몰(Shopify) 반품은 SKU와 무관하게 무조건 폐기 처리
   // - 판매 출고에서는 차감하고, 폐기 수량으로 기록
+  // - 결과보고서(processShopify)와 같은 기준: 주문 단위로 순 반품액을 합산해 음수인 주문만 1건 반영하고,
+  //   품목도 같은 함수로 판정한다. (행 단위로 처리하면 SKU 빈 행이 먼저 나온 주문이 누락됨)
   const returnData = getSheetData(returnSheet, '주문 이름');
-  const processedReturns = new Set();
-  returnData.forEach(row => {
-    const orderName = (row['주문 이름'] || '').toString().trim();
-    const netReturn = parseNum(row['순 반품액']);
-    const country = (row['배송 국가'] || '').toString().trim();
-    const sku = (row['제품 이형 SKU(재고 관리 코드)'] || '').toString().trim();
+  const salesByOrderForReturn = groupShopifySalesByOrder_(salesData);
+  const returnsByOrder = aggregateShopifyReturnsByOrder_(returnData);
+  Object.keys(returnsByOrder).forEach(orderName => {
+    const orderReturn = returnsByOrder[orderName];
+    if (orderReturn.netReturn >= 0) return;
 
-    if (!orderName || netReturn > 0 || processedReturns.has(orderName)) return;
+    const item = resolveShopifyReturnItem_(orderName, orderReturn, skuToCodeMap, salesByOrderForReturn);
+    const warehouse = orderReturn.country === 'United States' ? 'west' : 'post';
 
-    const code = getCodeFromSku_(sku, skuToCodeMap);
-    const warehouse = country === 'United States' ? 'west' : 'post';
-
-    applyInventoryMovement_(stockMap, code, warehouse, 'salesOut', -1);
-    applyInventoryMovement_(stockMap, code, warehouse, 'disposalOut', 1);
-
-    processedReturns.add(orderName);
+    applyInventoryMovement_(stockMap, item.code, warehouse, 'salesOut', -1);
+    applyInventoryMovement_(stockMap, item.code, warehouse, 'disposalOut', 1);
   });
 
   // 3) Amazon transactions: Order는 총 판매, Refund는 비실리가드 품목의 반품 수량 기준.
@@ -206,37 +205,32 @@ function buildInventoryStatement_() {
     }
   });
 
-  // 4) Amazon Return: SILIGUARD는 실제 반품 처리 결과(detailed-disposition) 기준으로 반영한다.
-  //    - 폐기 = UNSELLABLE(SELLABLE 이외) 수량
-  //    - 판매 출고 = 주문 - 실제 반품 수량(SELLABLE + UNSELLABLE)
-  //    환불만 되고 반품되지 않은 수량은 판매 출고로 남아 기말 재고가 부풀려지지 않는다.
-  const amazonReturnQty = loadAmazonReturnQty_(amazonReturnSheet, skuToCodeMap);
-  const amazonSellableReturnQtyByCode = amazonReturnQty.sellable;
-  const amazonUnsellableReturnQtyByCode = amazonReturnQty.unsellable;
+  // 4) Amazon SILIGUARD: 이카운트(아마존_결과)는 환불을 수량 -로 입력하므로 판매 출고도 같은 기준으로 맞춘다.
+  //    - 판매 출고 = 주문 - 환불 (아마존_결과의 판매 + 환불 수량과 동일)
+  //    - 폐기 = 환불 - Amazon Return SELLABLE 수량 (환불분 중 재입고되지 않은 수량)
+  //    UNSELLABLE 기준으로 폐기를 잡으면 판매 출고가 이카운트와 어긋나고(2026-09 확인),
+  //    전월에 환불로 이미 폐기 처리된 건이 당월 UNSELLABLE로 다시 잡혀 이중 차감된다.
+  const amazonSellableReturnQtyByCode = loadAmazonReturnQty_(amazonReturnSheet, skuToCodeMap).sellable;
 
   const salesOutCodeSet = {};
-  [amazonOrderQtyByCode, amazonSellableReturnQtyByCode, amazonUnsellableReturnQtyByCode].forEach(map => {
+  [amazonOrderQtyByCode, amazonRefundQtyByCode].forEach(map => {
     Object.keys(map).forEach(codeKey => { salesOutCodeSet[codeKey] = true; });
   });
 
   Object.keys(salesOutCodeSet).forEach(codeKey => {
     const orderQty = amazonOrderQtyByCode[codeKey] || 0;
-    const returnedQty = siliguardCodeSet[codeKey]
-      ? (amazonSellableReturnQtyByCode[codeKey] || 0) + (amazonUnsellableReturnQtyByCode[codeKey] || 0)
-      : 0;
-    applyInventoryMovement_(stockMap, codeKey, 'amazon', 'salesOut', orderQty - returnedQty);
-  });
-
-  Object.keys(amazonUnsellableReturnQtyByCode).forEach(codeKey => {
-    if (!siliguardCodeSet[codeKey]) return;
-    applyInventoryMovement_(stockMap, codeKey, 'amazon', 'disposalOut', amazonUnsellableReturnQtyByCode[codeKey]);
+    const refundQty = siliguardCodeSet[codeKey] ? (amazonRefundQtyByCode[codeKey] || 0) : 0;
+    applyInventoryMovement_(stockMap, codeKey, 'amazon', 'salesOut', orderQty - refundQty);
   });
 
   Object.keys(amazonRefundQtyByCode).forEach(codeKey => {
-    if (siliguardCodeSet[codeKey]) return; // 실리가드는 위 Amazon Return 기준으로 처리됨
-
     const totalRefundQty = amazonRefundQtyByCode[codeKey] || 0;
-    if (codeKey === cleanItemCode_(CONFIG.AUTOPRO_HARDCODE_SKU)) {
+
+    if (siliguardCodeSet[codeKey]) {
+      const sellableReturnQty = amazonSellableReturnQtyByCode[codeKey] || 0;
+      const disposalQty = Math.max(0, totalRefundQty - sellableReturnQty);
+      applyInventoryMovement_(stockMap, codeKey, 'amazon', 'disposalOut', disposalQty);
+    } else if (codeKey === cleanItemCode_(CONFIG.AUTOPRO_HARDCODE_SKU)) {
       applyInventoryMovement_(stockMap, codeKey, 'amazon', 'salesOut', -totalRefundQty);
     } else {
       applyInventoryMovement_(stockMap, codeKey, 'amazon', 'inbound', totalRefundQty);
@@ -1047,12 +1041,7 @@ function processShopify(ss, salesSheet, returnSheet, transSheet, rate, skuMap) {
   let referenceDate = "";
 
   // 주문별 판매 데이터 그룹화: Subtotal/Total을 주문당 한 번만 반영한다.
-  const salesByOrder = {};
-  salesData.forEach((row, index) => {
-    const orderName = (row['Name'] || '').toString().trim() || `__ROW_${index}`;
-    if (!salesByOrder[orderName]) salesByOrder[orderName] = [];
-    salesByOrder[orderName].push(row);
-  });
+  const salesByOrder = groupShopifySalesByOrder_(salesData);
 
   const standardSOrderMatchByRow = buildShopifyStandardSOrderMatchMap_(
     salesByOrder,
@@ -1132,32 +1121,7 @@ function processShopify(ss, salesSheet, returnSheet, transSheet, rate, skuMap) {
   });
 
   // 동일 주문의 환불·환불취소 행을 먼저 합산한 뒤 순 환불액만 한 번 반영한다.
-  const returnsByOrder = {};
-  returnRawData.forEach(retRow => {
-    const orderName = (retRow['주문 이름'] || '').toString().trim();
-    if (!orderName) return;
-
-    if (!returnsByOrder[orderName]) {
-      returnsByOrder[orderName] = {
-        netReturn: 0,
-        totalReturn: 0,
-        dateValue: '',
-        csvSku: '',
-        productName: ''
-      };
-    }
-
-    const orderReturn = returnsByOrder[orderName];
-    orderReturn.netReturn += parseNum(retRow['순 반품액']);
-    orderReturn.totalReturn += parseNum(retRow['총 반품액']);
-    if (retRow['일']) orderReturn.dateValue = retRow['일'];
-    if (retRow['제품 이형 SKU(재고 관리 코드)']) {
-      orderReturn.csvSku = retRow['제품 이형 SKU(재고 관리 코드)'].toString().trim();
-    }
-    if (retRow['판매 시점의 제품 이름']) {
-      orderReturn.productName = retRow['판매 시점의 제품 이름'].toString();
-    }
-  });
+  const returnsByOrder = aggregateShopifyReturnsByOrder_(returnRawData);
 
   Object.keys(returnsByOrder).forEach(orderName => {
     const orderReturn = returnsByOrder[orderName];
@@ -1166,26 +1130,9 @@ function processShopify(ss, salesSheet, returnSheet, transSheet, rate, skuMap) {
 
     const dateStr = formatDate(orderReturn.dateValue);
     const csvSku = orderReturn.csvSku;
-    const productName = orderReturn.productName;
-    let finalSku = '';
-    let finalName = productName || 'Unknown Product';
-
-    if (csvSku && skuMap[csvSku]) {
-      finalSku = skuMap[csvSku].code;
-      finalName = skuMap[csvSku].name;
-    } else {
-      const matchedSales = salesByOrder[orderName] || [];
-      if (matchedSales.length > 0) {
-        const matchedRow = matchedSales[0];
-        const matchedSku = (matchedRow['Lineitem sku'] || '').toString().trim();
-        const matched = skuMap[matchedSku] || { code: matchedSku, name: matchedRow['Lineitem name'] };
-        finalSku = matched.code;
-        finalName = matched.name;
-      } else if (Math.abs(orderReturn.totalReturn) >= 90 || productName.indexOf('AutoPro') > -1) {
-        finalSku = CONFIG.AUTOPRO_HARDCODE_SKU;
-        finalName = finalName === 'Unknown Product' ? '메이튼 오토 프로 X' : finalName;
-      }
-    }
+    const returnItem = resolveShopifyReturnItem_(orderName, orderReturn, skuMap, salesByOrder);
+    const finalSku = returnItem.code;
+    const finalName = returnItem.name;
 
     const finalQty = -1;
     const finalUnitPrice = Math.abs(netReturn);
@@ -1252,6 +1199,86 @@ function processAmazon(ss, transSheet, rate, skuMap, salesData) {
     result.push(createOutputRow(cableDate, CONFIG.AMAZON_CUSTOMER_CODE, CONFIG.MANAGER_NAME, CONFIG.AUTOPRO_CABLE_CODE, '오토프로X 부속 케이블 (자동집계)', autoproQtySum, 0, rate, '판매', CONFIG.AMAZON_COMM_RATE, CONFIG.WAREHOUSE_CODE_AMAZON));
   }
   writeResultToSheet(ss, '아마존_결과', ["일자", "순번", "거래처코드", "거래처명", "담당자", "비고", "출하창고", "거래유형", "통화", "환율", "품목코드", "품목명", "규격", "수량", "단가(vat포함)순매출", "외화금액", "공급가액", "부가세", "적요", "생산전표생성", "수수료", "수수료포함가"], result);
+}
+
+function groupShopifySalesByOrder_(salesData) {
+  const salesByOrder = {};
+  (salesData || []).forEach((row, index) => {
+    const orderName = (row['Name'] || '').toString().trim() || `__ROW_${index}`;
+    if (!salesByOrder[orderName]) salesByOrder[orderName] = [];
+    salesByOrder[orderName].push(row);
+  });
+  return salesByOrder;
+}
+
+/**
+ * Shopify return 탭을 주문 단위로 합산한다.
+ * 한 주문의 반품이 SKU 있는 행 / SKU 없는 행 / 환불취소(+) 행으로 나뉘어 들어오므로
+ * 순 반품액은 합산하고 SKU·국가·제품명은 값이 있는 행에서 가져온다.
+ * 결과보고서(processShopify)와 수불대장이 같은 기준을 쓰도록 공용으로 사용한다.
+ */
+function aggregateShopifyReturnsByOrder_(returnRawData) {
+  const returnsByOrder = {};
+  (returnRawData || []).forEach(retRow => {
+    const orderName = (retRow['주문 이름'] || '').toString().trim();
+    if (!orderName) return;
+
+    if (!returnsByOrder[orderName]) {
+      returnsByOrder[orderName] = {
+        netReturn: 0,
+        totalReturn: 0,
+        dateValue: '',
+        csvSku: '',
+        productName: '',
+        country: ''
+      };
+    }
+
+    const orderReturn = returnsByOrder[orderName];
+    orderReturn.netReturn += parseNum(retRow['순 반품액']);
+    orderReturn.totalReturn += parseNum(retRow['총 반품액']);
+    if (retRow['일']) orderReturn.dateValue = retRow['일'];
+    if (retRow['제품 이형 SKU(재고 관리 코드)']) {
+      orderReturn.csvSku = retRow['제품 이형 SKU(재고 관리 코드)'].toString().trim();
+    }
+    if (retRow['판매 시점의 제품 이름']) {
+      orderReturn.productName = retRow['판매 시점의 제품 이름'].toString();
+    }
+    if (retRow['배송 국가']) {
+      orderReturn.country = retRow['배송 국가'].toString().trim();
+    }
+  });
+  return returnsByOrder;
+}
+
+/**
+ * 순 반품 주문의 품목코드/품목명 판정 (결과보고서와 수불대장 공용).
+ * SKU 매핑 → 당월 판매 주문의 SKU → 금액/제품명 기준 오토프로X 순서로 판정한다.
+ */
+function resolveShopifyReturnItem_(orderName, orderReturn, skuMap, salesByOrder) {
+  const csvSku = orderReturn.csvSku;
+  const productName = orderReturn.productName;
+  let code = '';
+  let name = productName || 'Unknown Product';
+
+  if (csvSku && skuMap[csvSku]) {
+    code = skuMap[csvSku].code;
+    name = skuMap[csvSku].name;
+  } else {
+    const matchedSales = salesByOrder[orderName] || [];
+    if (matchedSales.length > 0) {
+      const matchedRow = matchedSales[0];
+      const matchedSku = (matchedRow['Lineitem sku'] || '').toString().trim();
+      const matched = skuMap[matchedSku] || { code: matchedSku, name: matchedRow['Lineitem name'] };
+      code = matched.code;
+      name = matched.name;
+    } else if (Math.abs(orderReturn.totalReturn) >= 90 || productName.indexOf('AutoPro') > -1) {
+      code = CONFIG.AUTOPRO_HARDCODE_SKU;
+      name = name === 'Unknown Product' ? '메이튼 오토 프로 X' : name;
+    }
+  }
+
+  return { code: code, name: name };
 }
 
 function createOutputRow(date, custCode, manager, sku, itemName, qty, unitPrice, rate, note, commRate, warehouseCode) {
