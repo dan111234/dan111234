@@ -12,13 +12,13 @@ ALLOWED_ORIGINS = "chrome-extension://alialhhcfbmjkjlbhdmmegejmjhpeiap"
 binding = "DB"
 database_name = "oa-lens"
 # Paste the database_id printed by `npx wrangler d1 create oa-lens`.
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "974f024f-f444-4bc0-a65c-a087166f3420"
 migrations_dir = "migrations"
 
 [[kv_namespaces]]
 binding = "CACHE"
 # Paste the id printed by `npx wrangler kv namespace create CACHE`.
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "9b486d4fd4da411d9457abbe828637db"
 
 # Daily cleanup of history rows older than 30 days (docs/07 §5).
 [triggers]
