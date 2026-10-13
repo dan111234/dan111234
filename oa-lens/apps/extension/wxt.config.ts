@@ -1,16 +1,13 @@
-import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
 import preact from '@preact/preset-vite';
-import { loadEnv } from 'vite';
 import { defineConfig } from 'wxt';
 
 // Fixed public key so the extension ID (and the Worker's ALLOWED_ORIGINS) survives reinstalls.
-// Generate one with `pnpm ext:key`; it is written to apps/extension/.env.local (git-ignored).
-const env = loadEnv(
-  process.env.NODE_ENV ?? 'development',
-  fileURLToPath(new URL('.', import.meta.url)),
-  'OAL_',
-);
-const extensionKey = (process.env.OAL_EXTENSION_KEY ?? env.OAL_EXTENSION_KEY)?.trim();
+// Created by `pnpm ext:key`. OAL_EXTENSION_KEY overrides it.
+const keyFile = new URL('./extension-key.pub', import.meta.url);
+const extensionKey =
+  process.env.OAL_EXTENSION_KEY?.trim() ||
+  (existsSync(keyFile) ? readFileSync(keyFile, 'utf8').trim() : undefined);
 
 export default defineConfig({
   imports: false,

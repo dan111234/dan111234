@@ -83,7 +83,7 @@ oa-lens/
 - `pnpm typecheck`, `pnpm lint`, `pnpm format`: tsc / ESLint / Prettier
 - `pnpm build`: 확장 zip(`.output/chrome-mv3` + zip)과 Worker 배포용 번들(`apps/worker/dist`) 생성
 - `pnpm deploy:worker`: `wrangler deploy`
-- `pnpm ext:key`: 확장 ID 고정용 manifest key 생성(`apps/extension/.env.local`), Worker `ALLOWED_ORIGINS` 값 출력
+- `pnpm ext:key`: 확장 ID 고정용 manifest 공개키(`apps/extension/extension-key.pub`, 커밋함) 생성 + `wrangler.toml`의 `ALLOWED_ORIGINS` 갱신. 현재 ID `alialhhcfbmjkjlbhdmmegejmjhpeiap`
 
 ## 구현 메모
 - Tailwind는 **v3.4**를 쓴다(prefix `oal-`). v4는 `@property`로 변수를 등록하는데 Shadow DOM 안에서는 동작하지 않는다. `postcss.config.cjs`가 `rem`을 px로 바꾼다(Shadow DOM은 페이지의 html font-size를 따라가기 때문).

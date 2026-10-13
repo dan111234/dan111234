@@ -3,11 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Comma-separated extension origins allowed by CORS, e.g. "chrome-extension://abcdefghijklmnopabcdefghijklmnop".
-# Leave empty while setting up: any chrome-extension:// origin is accepted (the shared key still applies).
-# `pnpm ext:key` prints the value to put here.
+# Comma-separated extension origins allowed by CORS. Empty = any chrome-extension:// origin
+# (the shared key still applies). Set by `pnpm ext:key` from apps/extension/extension-key.pub.
 [vars]
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "chrome-extension://alialhhcfbmjkjlbhdmmegejmjhpeiap"
 
 [[d1_databases]]
 binding = "DB"

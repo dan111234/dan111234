@@ -46,12 +46,10 @@ pnpm dev:worker                                          # http://localhost:8787
 ```
 로컬 Worker를 쓸 때는 확장 옵션의 Worker URL에 `http://localhost:8787`을 넣습니다.
 
-### 확장 ID 고정 (권장)
-Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 확장만 CORS로 허용합니다(비어 있으면 모든 확장 허용, 공유키는 항상 필요).
-```bash
-pnpm ext:key        # apps/extension/.env.local에 고정 키를 만들고 확장 ID를 출력
-```
-출력된 `ALLOWED_ORIGINS = "chrome-extension://<ID>"` 줄을 `apps/worker/wrangler.toml`의 `[vars]`에 넣고 `pnpm deploy:worker`로 다시 배포합니다. 이후 확장을 다시 빌드하면 재설치해도 ID가 바뀌지 않습니다.
+### 확장 ID
+확장 ID는 `apps/extension/extension-key.pub`(공개키, 비밀값 아님)로 고정되어 있습니다: `alialhhcfbmjkjlbhdmmegejmjhpeiap`.
+Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 이 확장만 CORS로 허용합니다(비어 있으면 모든 확장 허용, 공유키는 항상 필요).
+새 ID가 필요하면 `pnpm ext:key --force`를 실행하면 두 파일이 함께 바뀌고, Worker를 다시 배포해야 합니다.
 
 ## 확장 설치
 1. `pnpm build`(배포용) 또는 `pnpm dev:ext`(코드 수정 시 자동 새로고침)를 실행합니다.
