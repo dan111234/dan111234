@@ -155,3 +155,41 @@ export interface ProductBundleDTO {
   eligibility: PartResult<EligibilityDTO>;
   buyCost: PartResult<BuyCostDTO | null>;
 }
+
+/**
+ * Keepa product, trimmed to what the widget shows (docs/06). Arrays are Keepa csv-indexed
+ * (0 AMAZON, 1 NEW, 2 USED, 3 SALES, 7 NEW_FBM_SHIPPING, 10 NEW_FBA, 18 BUY_BOX_SHIPPING …);
+ * prices in cents, -1 = no data.
+ */
+export interface KeepaProductDTO {
+  asin: string;
+  avg30: number[];
+  avg90: number[];
+  avg180: number[];
+  current: number[];
+  salesRankDrops30: number | null;
+  salesRankDrops90: number | null;
+  salesRankDrops180: number | null;
+  outOfStockPercentage30: number[];
+  outOfStockPercentage90: number[];
+  monthlySold: number | null;
+  /** Unix ms. */
+  listedSince: number | null;
+  /** csv[3] (SALES) history, for the 3% drop count. */
+  salesCsv: number[] | null;
+  /** Requested with offers=20, so FBA/FBM/Buy Box averages are filled. */
+  withOffers: boolean;
+}
+
+export interface KeepaQuotaDTO {
+  tokensLeft: number;
+  refillIn: number;
+  refillRate?: number;
+  updatedAt: number;
+}
+
+/** GET /v1/{mp}/keepa/product/{asins} (docs/07 §4). */
+export interface KeepaProductsDTO {
+  products: KeepaProductDTO[];
+  quota: KeepaQuotaDTO | null;
+}

@@ -2,6 +2,7 @@ import type {
   BuyCostDTO,
   CatalogDTO,
   HealthDTO,
+  KeepaProductsDTO,
   OfferCondition,
   PrepDTO,
   ProductBundleDTO,
@@ -16,6 +17,8 @@ export type Request =
   | { type: 'catalog'; asin: string; fresh?: boolean }
   | { type: 'product'; asin: string; condition: OfferCondition; fresh?: boolean }
   | { type: 'prep'; asin: string }
+  /** `offers` adds FBA/FBM/Buy Box averages (about 6 tokens instead of 1). `auto` = not clicked. */
+  | { type: 'keepa'; asin: string; offers: boolean; auto: boolean }
   | {
       type: 'saveBuyCost';
       asin: string;
@@ -30,6 +33,7 @@ export interface ResponseMap {
   catalog: ClientResult<CatalogDTO>;
   product: ClientResult<ProductBundleDTO>;
   prep: ClientResult<PrepDTO>;
+  keepa: ClientResult<KeepaProductsDTO>;
   saveBuyCost: ClientResult<BuyCostDTO>;
   openOptions: { ok: true };
 }

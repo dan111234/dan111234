@@ -5,7 +5,9 @@
 
 > **범위 조정 (2026-10-13, 사용자 결정)**: 다음 화면은 구현하지 않는다 — Offers 섹션(08), Graphs(09), 검색결과 위젯·테이블(13·14), 스토어프런트(15), Lists·History(16), Bulk(17), Sourcing(18), Copy & Export 설정(19), 사이드바 모드(20). 그래서 P3는 지표 줄과 30/90/180 표만, P5는 Notes와 링크만, P7·P8은 하지 않는다.
 >
-> 진행 상황: P0 완료, P1 완료(verify:fees 21개 중 17개 일치, 4개 원인 설명), P2 구현 완료(Targets·Order Totals를 앞당겨 포함). P2 완료 기준 중 사용자 확인 항목이 남아 있다.
+> 진행 상황: P0 완료, P1 완료(verify:fees 21개 중 17개 일치, 4개 원인 설명), P2 구현 완료(Targets·Order Totals를 앞당겨 포함), P3 구현 완료(지표 줄, 30/90/180 표, Keepa 프록시, 토큰 예산). P2·P3 완료 기준 중 사용자 확인 항목이 남아 있다.
+>
+> Haz·Prep: 새 Refresh Token에 Amazon Fulfillment 역할이 들어가 FBA Inbound v2024-03-20은 열리지만, `getItemEligibilityPreview`(v1)와 `getPrepInstructions`(v0)는 여전히 403이다. 대안(Seller Central 페이지 확인 등)은 별도로 정한다.
 
 | 단계 | 내용 | 결과물 |
 |---|---|---|

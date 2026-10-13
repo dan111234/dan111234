@@ -1,9 +1,17 @@
-import type { BuyCostDTO, CatalogDTO, HealthDTO, PrepDTO, ProductBundleDTO } from '@oa-lens/shared';
+import type {
+  BuyCostDTO,
+  CatalogDTO,
+  HealthDTO,
+  KeepaProductsDTO,
+  PrepDTO,
+  ProductBundleDTO,
+} from '@oa-lens/shared';
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import type { Request, ResponseFor } from '../lib/messages';
 import { RequestQueue } from '../lib/queue';
 import { ResponseCache, type CacheEntry } from '../lib/responseCache';
+import { KEEPA_MIN_TOKENS } from '../lib/keepaView';
 import { loadWorkerConfig } from '../lib/settings';
 import { clientError, workerFetch } from '../lib/workerClient';
 
@@ -11,6 +19,12 @@ const CATALOG_TTL_MS = 10 * 60 * 1000;
 /** Offers inside the bundle change quickly; the Worker caches them for 3 minutes. */
 const PRODUCT_TTL_MS = 2 * 60 * 1000;
 const PREP_TTL_MS = 60 * 60 * 1000;
+/** docs/01 §5: Keepa stats 1 hour, offers 10 minutes. */
+const KEEPA_TTL_MS = 60 * 60 * 1000;
+const KEEPA_OFFERS_TTL_MS = 10 * 60 * 1000;
+
+/** Last Keepa token count seen, to pause automatic requests when it runs low. */
+let keepaQuota: { tokensLeft: number; refillIn: number; at: number } | null = null;
 
 // docs/01 §4: getCatalogItem — 2 at a time, 500ms apart.
 const queues = {
@@ -18,6 +32,7 @@ const queues = {
   // The bundle calls getItemOffers (0.5/s) and getMyFeesEstimates (0.5/s) on cache misses.
   product: new RequestQueue({ concurrency: 1, intervalMs: 1000 }),
   userdata: new RequestQueue({ concurrency: 2, intervalMs: 0 }),
+  keepa: new RequestQueue({ concurrency: 1, intervalMs: 0 }),
 };
 
 const cache = new ResponseCache({
@@ -75,6 +90,34 @@ async function handle(request: Request): Promise<ResponseFor<Request>> {
       return cache.getOrLoad(`prep:us:${asin}`, PREP_TTL_MS, () =>
         workerFetch<PrepDTO>(config, `/v1/us/spapi/prep/${asin}`),
       );
+    }
+    case 'keepa': {
+      const config = await loadWorkerConfig();
+      const asin = request.asin.toUpperCase();
+      const key = `keepa:us:${asin}:${request.offers ? 20 : 0}`;
+      const ttl = request.offers ? KEEPA_OFFERS_TTL_MS : KEEPA_TTL_MS;
+      const result = await cache.getOrLoad(key, ttl, async () => {
+        // Below the reserve, only explicit clicks may spend tokens (docs/01 §5-4).
+        if (request.auto && keepaQuota) {
+          const refilled = keepaQuota.tokensLeft + ((Date.now() - keepaQuota.at) / 60000) * 20;
+          if (refilled < KEEPA_MIN_TOKENS) {
+            return clientError('RATE_LIMIT', 'Keepa 토큰 대기 중', {
+              retryAfter: Math.ceil(keepaQuota.refillIn / 1000),
+            });
+          }
+        }
+        return queues.keepa.run(() =>
+          workerFetch<KeepaProductsDTO>(
+            config,
+            `/v1/us/keepa/product/${asin}${request.offers ? '?offers=20' : ''}`,
+            { timeoutMs: 30_000 },
+          ),
+        );
+      });
+      if (result.ok && result.data.quota) {
+        keepaQuota = { ...result.data.quota, at: Date.now() };
+      }
+      return result;
     }
     case 'saveBuyCost': {
       const config = await loadWorkerConfig();

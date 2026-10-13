@@ -5,6 +5,7 @@ import { allowedOrigin, bearerAuth } from './lib/auth';
 import { ApiError, toApiError } from './lib/errors';
 import { failBody } from './lib/respond';
 import { healthRoutes } from './routes/health';
+import { keepaRoutes, quotaRoutes } from './routes/keepa';
 import { productRoutes } from './routes/product';
 import { spapiRoutes } from './routes/spapi';
 import { userdataRoutes } from './routes/userdata';
@@ -27,8 +28,10 @@ export function createApp() {
 
   app.route('/v1', healthRoutes);
   app.route('/v1/userdata', userdataRoutes);
+  app.route('/v1/quota', quotaRoutes);
   app.route('/v1/:mp/spapi', spapiRoutes);
   app.route('/v1/:mp/product', productRoutes);
+  app.route('/v1/:mp/keepa', keepaRoutes);
 
   app.notFound((c) => c.json(failBody(new ApiError('NOT_FOUND', 'Route not found')), 404));
   app.onError((err, c) => {

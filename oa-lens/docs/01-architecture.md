@@ -72,7 +72,7 @@ SP-API 한도는 작업마다 다르다. 응답 헤더 `x-amzn-RateLimit-Limit`�
 - 최소 플랜은 분당 20토큰이고, 남은 토큰은 응답의 `tokensLeft`로 알 수 있다. Worker는 이 값을 KV에 저장하고 `/v1/quota`로 보여준다.
 - 대략적인 비용: 상품 1개(stats·history)는 1토큰, offers는 오퍼 10개 페이지당 +6토큰, 셀러 조회는 셀러당 1토큰, Product Finder는 결과 10개 페이지당 10토큰. 정확한 값은 keepa.com/api-docs에서 확인한다.
 - 규칙
-  1. 상세페이지는 stats·history만 자동으로 받는다. offers는 Offers 섹션을 펼칠 때(또는 고정했을 때)만 받는다.
+  1. 상세페이지는 stats·history만 자동으로 받는다(1토큰). offers=20(약 6토큰)은 30/90/180 표를 펼칠 때(또는 고정했을 때)만 받는다. FBA·FBM·Buy Box 평균가는 offers를 붙여야 Keepa가 채워 준다(2026-10-13 확인)
   2. 검색결과 위젯은 화면에 보이는 상품만, 한 번에 최대 10개씩 묶어서 요청한다(IntersectionObserver).
   3. 같은 ASIN은 1시간 동안 캐시한다. Offers는 10분.
   4. 남은 토큰이 5 미만이면 자동 요청을 멈추고 위젯 상단에 "Keepa 토큰 대기 중"을 표시한다.

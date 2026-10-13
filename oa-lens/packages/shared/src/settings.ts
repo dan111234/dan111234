@@ -7,7 +7,8 @@ export type PlacementLocationSetting = 1 | 2 | 3 | 5;
 export type LowInventorySetting = 'select' | '0-14' | '14-21' | '21-28' | '28+';
 export type MfnShipMethodSetting = 'usps' | 'pound' | 'flat';
 export type UspsServiceSetting = 'ground_advantage' | 'priority' | 'media_mail';
-export type SellPriceOrder = 'buybox_lowprice' | 'lowfba_buybox_lowprice' | 'lowfbm_buybox_lowprice';
+export type SellPriceOrder =
+  'buybox_lowprice' | 'lowfba_buybox_lowprice' | 'lowfbm_buybox_lowprice';
 export type RoiMethodSetting = 'buyCostOnly' | 'buyCost_Other_Inbound' | 'allFees';
 
 export interface PrepChipSetting {
@@ -95,9 +96,43 @@ export interface Settings {
   usePromoFees: boolean;
   hideHints: boolean;
   hideFBMColumn: boolean;
+  // 30/90/180 Table
+  /** Comma-separated row keys in display order (KEEPA_TABLE_ROWS). */
+  keepaMoreTableRows: string;
+  /** Pinned open: also loads it (and its Keepa offers) automatically on the next product. */
+  autoKeepaTable: boolean;
   // Display
   displayFontSize: 'smaller' | 'small' | 'default' | 'large' | 'larger';
 }
+
+/** 30/90/180 table rows (docs/05 30/90/180 Table tab). */
+export const KEEPA_TABLE_ROWS = [
+  'sales',
+  'salesDrop',
+  'avgRank',
+  'outOfStockRateAmz',
+  'outOfStockRate3p',
+  'avgPriceFBA',
+  'avgPriceBB',
+  'avgPriceNew',
+  'avgPrice3p',
+  'avgPriceUsed',
+] as const;
+
+export type KeepaTableRow = (typeof KEEPA_TABLE_ROWS)[number];
+
+export const KEEPA_TABLE_ROW_LABELS: Record<KeepaTableRow, string> = {
+  sales: 'Sales',
+  salesDrop: 'Rank - Drops',
+  avgRank: 'Rank - Avg',
+  outOfStockRateAmz: 'Out of Stock Rate - Amz',
+  outOfStockRate3p: 'Out of Stock Rate - 3p',
+  avgPriceFBA: 'Price Avg - FBA',
+  avgPriceBB: 'Price Avg - Buy Box',
+  avgPriceNew: 'Price Avg - Amz',
+  avgPrice3p: 'Price Avg - 3p',
+  avgPriceUsed: 'Price Avg - Used',
+};
 
 export const DEFAULT_PREP_CHIP_SETTINGS: PrepChipSetting[] = [
   { id: 'bag', label: 'Bag', amount: 0.7 },
@@ -174,6 +209,8 @@ export const DEFAULT_SETTINGS: Settings = {
   usePromoFees: true,
   hideHints: false,
   hideFBMColumn: false,
+  keepaMoreTableRows: KEEPA_TABLE_ROWS.join(','),
+  autoKeepaTable: false,
   displayFontSize: 'default',
 };
 
@@ -229,7 +266,10 @@ function sanitize<T extends object>(defaults: T, raw: unknown): T {
       out[key] = Array.isArray(value) ? value.filter((v) => typeof v === 'string') : def;
     } else if (ENUMS[key]) {
       if (ENUMS[key]!.includes(value)) out[key] = value;
-    } else if (typeof value === typeof def && (typeof value !== 'number' || Number.isFinite(value))) {
+    } else if (
+      typeof value === typeof def &&
+      (typeof value !== 'number' || Number.isFinite(value))
+    ) {
       out[key] = value;
     }
   }

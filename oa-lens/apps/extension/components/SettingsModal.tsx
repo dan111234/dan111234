@@ -1,6 +1,9 @@
 // Settings popup (docs/02 §K-5, docs/05). Values save as soon as they change.
 import {
   DEFAULT_SETTINGS,
+  KEEPA_TABLE_ROW_LABELS,
+  KEEPA_TABLE_ROWS,
+  type KeepaTableRow,
   mergeSettings,
   type MarketSettings,
   type Settings,
@@ -9,13 +12,15 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { cx, MoneyInput, Select } from './ui';
 
-export type SettingsTab = 'fba' | 'fbm' | 'sellbuy' | 'roi' | 'targets' | 'general' | 'display';
+export type SettingsTab =
+  'fba' | 'fbm' | 'sellbuy' | 'roi' | 'keepaTable' | 'targets' | 'general' | 'display';
 
 const TABS: [SettingsTab, string][] = [
   ['fba', 'FBA'],
   ['fbm', 'FBM'],
   ['sellbuy', 'Sell Price/Buy Cost'],
   ['roi', 'ROI-Margin'],
+  ['keepaTable', '30/90/180 Table'],
   ['targets', 'Targets'],
   ['general', 'General'],
   ['display', 'Display'],
@@ -469,6 +474,68 @@ export function SettingsModal(props: Props) {
         </>
       );
       break;
+    case 'keepaTable': {
+      const on = s.keepaMoreTableRows
+        .split(',')
+        .filter((k): k is KeepaTableRow => (KEEPA_TABLE_ROWS as readonly string[]).includes(k));
+      const order = [...on, ...KEEPA_TABLE_ROWS.filter((k) => !on.includes(k))];
+      const save = (rows: KeepaTableRow[]) => set({ keepaMoreTableRows: rows.join(',') });
+      const move = (key: KeepaTableRow, dir: -1 | 1) => {
+        const i = on.indexOf(key);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= on.length) return;
+        const next = [...on];
+        [next[i], next[j]] = [next[j]!, next[i]!];
+        save(next);
+      };
+      body = (
+        <>
+          <p class="oal-mb-[6px] oal-text-[12px] oal-text-[#565959]">
+            Select which rows appear after you click on the 30/90/180 button:
+          </p>
+          {order.map((key) => {
+            const checked = on.includes(key);
+            return (
+              <div
+                key={key}
+                class="oal-flex oal-items-center oal-justify-between oal-border-b oal-border-[#f0f0f0] oal-py-[5px]"
+              >
+                <Check
+                  checked={checked}
+                  label={KEEPA_TABLE_ROW_LABELS[key]}
+                  onChange={(v) => save(v ? [...on, key] : on.filter((k) => k !== key))}
+                />
+                {checked && (
+                  <span class="oal-flex oal-gap-[4px] oal-text-[12px]">
+                    <button
+                      type="button"
+                      class="oal-px-[4px] hover:oal-bg-[#eee]"
+                      onClick={() => move(key, -1)}
+                      title="Move up"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      class="oal-px-[4px] hover:oal-bg-[#eee]"
+                      onClick={() => move(key, 1)}
+                      title="Move down"
+                    >
+                      ▼
+                    </button>
+                  </span>
+                )}
+              </div>
+            );
+          })}
+          <p class="oal-mt-[8px] oal-text-[12px] oal-text-[#565959]">
+            FBA and Buy Box averages need Keepa offer data (about 6 tokens per product instead of
+            1), so they load only while the table is open.
+          </p>
+        </>
+      );
+      break;
+    }
     case 'targets':
       body = (
         <>
@@ -515,6 +582,19 @@ export function SettingsModal(props: Props) {
                 [3, '3%'],
               ]}
               onChange={(v) => set({ closeFBAPercent: v })}
+            />
+          </Field>
+          <Field
+            label="Sales Rank Drop Count Calculation"
+            hint="3% Drop counts every time the rank improves by more than 3% in Keepa's rank history."
+          >
+            <Radio
+              value={s.salesRankDropCalcMethod}
+              options={[
+                ['standard', 'Standard'],
+                ['threePercentDrop', '3% Drop'],
+              ]}
+              onChange={(v) => set({ salesRankDropCalcMethod: v })}
             />
           </Field>
           <Field label="Use Peak fees for the main Net">

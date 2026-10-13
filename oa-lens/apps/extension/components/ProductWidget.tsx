@@ -21,6 +21,7 @@ import { saveSettings, watchSettings } from '../lib/settings';
 import type { ClientError } from '../lib/workerClient';
 import { Calculator, OfferSummary, ProductBox, Targets } from './Calculator';
 import { Header } from './Header';
+import { KeepaMetrics, KeepaTable, KeepaTablePill, type KeepaState } from './KeepaSection';
 import type { WidgetModel } from './model';
 import { SettingsModal, type SettingsTab } from './SettingsModal';
 import { cx, SectionPill } from './ui';
@@ -68,14 +69,6 @@ const FONT_SCALE: Record<Settings['displayFontSize'], number> = {
   larger: 1.1,
 };
 
-/** "past month" -> "30d Sales", "past week" -> "7d Sales" (docs/02 §B-2). */
-function salesLabel(bought: BoughtPastMonth | null): string {
-  const period = bought?.period.toLowerCase() ?? 'past month';
-  if (period.includes('week')) return '7d Sales';
-  if (period.includes('year')) return '1y Sales';
-  return '30d Sales';
-}
-
 const EMPTY_VALUES: CalculatorValues = { sellFba: null, sellFbm: null, buyFba: 0, buyFbm: 0 };
 const WIDE_PX = 440;
 
@@ -112,17 +105,6 @@ function RankLine({ rank, loading }: { rank: SalesRank | null; loading: boolean 
   );
 }
 
-function Metric(props: { label: string; value: string; orange?: boolean; title?: string }) {
-  return (
-    <div class="oal-flex oal-flex-col oal-items-center" title={props.title}>
-      <span class="oal-text-[12px] oal-text-[#565959]">{props.label}</span>
-      <span class={cx('oal-text-[13px] oal-font-bold', props.orange && 'oal-text-[#e47911]')}>
-        {props.value}
-      </span>
-    </div>
-  );
-}
-
 export function ProductWidget({ asin, domTitle, bought }: Props) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -138,6 +120,9 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
   const [targetsOpen, setTargetsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [wide, setWide] = useState(true);
+  const [keepa, setKeepa] = useState<KeepaState>({ status: 'idle' });
+  const [keepaOffers, setKeepaOffers] = useState<KeepaState>({ status: 'idle' });
+  const [tableOpen, setTableOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(
@@ -196,6 +181,41 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
       cancelled = true;
     };
   }, [asin, condition, reload]);
+
+  // Keepa (docs/01 §5): stats automatically (1 token); offers (FBA/Buy Box averages, ~6 tokens)
+  // only when the 30/90/180 table is open. A pinned table loads the offers version directly.
+  const loadKeepa = useCallback(async (target: string, offers: boolean, auto: boolean) => {
+    const set = offers ? setKeepaOffers : setKeepa;
+    set({ status: 'loading' });
+    const res = await send({ type: 'keepa', asin: target, offers, auto });
+    if (target !== currentAsin.current) return;
+    const next: KeepaState = res.ok
+      ? { status: 'ready', product: res.data.products.find((p) => p.asin === target) ?? null }
+      : { status: 'error', error: res.error };
+    set(next);
+    if (offers && res.ok) setKeepa((k) => (k.status === 'ready' ? k : next));
+  }, []);
+  const currentAsin = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentAsin.current = asin;
+    if (!asin || !settingsLoaded) return;
+    const pinned = settings.autoKeepaTable;
+    setTableOpen(pinned);
+    setKeepaOffers({ status: 'idle' });
+    if (pinned) {
+      setKeepa({ status: 'loading' });
+      void loadKeepa(asin, true, true);
+    } else {
+      void loadKeepa(asin, false, true);
+    }
+  }, [asin, settingsLoaded]);
+
+  useEffect(() => {
+    if (tableOpen && asin && keepaOffers.status === 'idle') {
+      void loadKeepa(asin, true, settings.autoKeepaTable);
+    }
+  }, [tableOpen, asin, keepaOffers.status]);
 
   const bundle = state.status === 'ready' && state.bundle.asin === asin ? state.bundle : null;
   const catalog = bundle?.catalog.ok ? bundle.catalog.data : null;
@@ -304,7 +324,21 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
   const rank = catalog?.salesRank ?? (parentRank !== 'loading' ? parentRank : null);
   const title = catalog?.title ?? domTitle ?? '';
   const upc = catalog?.identifiers.upc[0] ?? catalog?.identifiers.ean[0] ?? null;
-  const listed = daysSince(catalog?.launchDate ?? null);
+  const keepaProduct =
+    (keepaOffers.status === 'ready' ? keepaOffers.product : null) ??
+    (keepa.status === 'ready' ? keepa.product : null);
+  const listed = daysSince(keepaProduct?.listedSince ?? catalog?.launchDate ?? null);
+  const keepaProps = {
+    keepa,
+    keepaOffers,
+    bought,
+    condition: condition ?? 'new',
+    settings,
+    tableOpen,
+    onToggleTable: () => setTableOpen((o) => !o),
+    onPin: (pinned: boolean) => updateSettings({ autoKeepaTable: pinned }),
+    onPrice: (price: number) => model.setSell('fba', price),
+  } as const;
   const restrictionsError = bundle ? !bundle.restrictions.ok : false;
   const transparency = (restrictions ?? []).some((r) => r.transparency);
   const fatal = state.status === 'error' ? state.error : null;
@@ -380,19 +414,10 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
         ) : (
           <RankLine rank={rank} loading={loading} />
         )}
-        <div class="oal-mt-[10px] oal-grid oal-grid-cols-[1fr_1fr_1fr_1px_1fr_1fr] oal-items-center">
-          <Metric label={salesLabel(bought)} value={bought?.value ?? '--'} />
-          <Metric label="30d Drops" value="--" title="Keepa 연동 후 표시 (P3)" />
-          <Metric label="90d Rank" value="--" title="Keepa 연동 후 표시 (P3)" />
-          <span class="oal-h-[28px] oal-bg-[#e3e6e6]" />
-          <Metric
-            label={condition === 'used' ? '90d Used' : '90d 3p'}
-            value="--"
-            title="Keepa 연동 후 표시 (P3)"
-          />
-          <Metric label="90d Amz" value="--" orange title="Keepa 연동 후 표시 (P3)" />
-        </div>
+        <KeepaMetrics {...keepaProps} />
+        <KeepaTablePill {...keepaProps} />
       </div>
+      {tableOpen && <KeepaTable {...keepaProps} />}
 
       {/* §C calculator + §D product box */}
       <div
