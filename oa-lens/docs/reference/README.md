@@ -27,3 +27,8 @@
 - 이 수치는 아마존이 공개한 2026년 수수료표를 옮긴 것이다. 아마존은 해마다(보통 1월 중순) 수수료를 바꾸고, 중간에 추가 요금을 붙이기도 한다. **SP-API 견적이 항상 우선**이고, 로컬 표는 가격·치수를 바꿔 보는 계산과 SP-API가 주지 않는 항목(보관료, 입고 배치, 재고 부족, Peak 기간)에만 쓴다.
 - 표를 고칠 때는 아마존 공식 페이지(Seller Central 도움말 "FBA fulfillment fees", "Monthly inventory storage fees", "Inbound placement service fee", "Low-inventory-level fee", "Referral fees")와 `pnpm verify:fees` 결과로 확인한다.
 - USPS 요금(`uspsPriceTable`)은 USPS 소매 요금 기준이라 실제 라벨 구매가와 다를 수 있다.
+
+## 검증 기록
+- 2026-10-13: 사용자 ASIN 21개로 `pnpm verify:fees` 실행. 17개는 $9/$13/$350 세 가격대 모두 SP-API와 같다(신발, 의류, Lg Bulky, XL, Beauty 규칙 포함). 표 값은 2026 공식 요율표와도 같다.
+- 차이가 난 4개(B0D22SLTFX, B0DQFCVFH5 의류 / B0D2S47TDZ, B0G27LRQQD Small Bulky)는 세 가격대에서 차이가 똑같다. 카탈로그 치수로 계산한 무게 구간이 아마존 청구 구간과 다르다는 뜻이고, 아마존이 창고에서 잰 치수가 카탈로그와 다른 경우로 보인다. 실제 화면에서는 SP-API 값을 쓰므로(04 §2-4) Net에는 영향이 없다.
+- 확인된 규칙: SP-API 견적에는 3.5% 연료·물류 추가 요금이 이미 들어 있다. 신발(SHOES, SANDAL)은 의류 표가 아니라 일반 표를 쓴다. `packages/core/src/fees/fixtures/spapi-quotes-2026-10-13.json`이 회귀 테스트로 이 결과를 고정한다.

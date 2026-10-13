@@ -1,0 +1,593 @@
+{
+  "_note": "SP-API getMyFeesEstimates (FBA, FinalFee) and catalog package dimensions, fetched 2026-10-13 (Non-Peak). Used as a regression test for the local tables.",
+  "items": [
+    {
+      "asin": "B0FBP3N9RK",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12.4016,
+        "width": 7.5591,
+        "height": 4.5669,
+        "weight": 1.8078
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 6.45,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.3,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 7.57,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0C46SK6M8",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 13.19,
+        "width": 7.28,
+        "height": 4.69,
+        "weight": 1.7593
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 6.45,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.3,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 7.57,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D3MNCBJX",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 13.5039,
+        "width": 9.4094,
+        "height": 4.8819,
+        "weight": 2.3369
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 6.86,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.71,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 7.98,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D22SLTFX",
+      "productType": "PANTS",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 14.3307,
+        "width": 10.6693,
+        "height": 2.0472,
+        "weight": 0.496
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 5.86,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 6.71,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 6.98,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D27YKF1R",
+      "productType": "SWEATSHIRT",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 13.27,
+        "width": 10.83,
+        "height": 2.01,
+        "weight": 1.0097
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 5.98,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 6.83,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 7.1,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0DQFCVFH5",
+      "productType": "SWEATSHIRT",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 15,
+        "width": 10.5906,
+        "height": 2.2441,
+        "weight": 1.0913
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 6.02,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 6.87,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 7.14,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0FXRRK4NZ",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12.4016,
+        "width": 6.8898,
+        "height": 4.4882,
+        "weight": 1.2368
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 5.63,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 6.48,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 6.75,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D2S47TDZ",
+      "productType": "BRA",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 18.5433,
+        "width": 11.2598,
+        "height": 4.3701,
+        "weight": 0.2756
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 11.06,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 11.85,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 11.85,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B000H904WS",
+      "productType": "PET_PLAYPEN",
+      "websiteDisplayGroup": "pet_products_display_on_website",
+      "dims": {
+        "length": 49.25,
+        "width": 25,
+        "height": 2.5,
+        "weight": 31.3497
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 21.07,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 21.87,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 21.87,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0BM5QN1K1",
+      "productType": "DRINKING_CUP",
+      "websiteDisplayGroup": "kitchen_display_on_website",
+      "dims": {
+        "length": 7.24,
+        "width": 7.2,
+        "height": 4.53,
+        "weight": 5.2007
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 7.11,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.96,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 8.23,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0BSKND5MN",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12.48,
+        "width": 6.93,
+        "height": 4.09,
+        "weight": 1.6799
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 5.63,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 6.48,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 6.75,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0FXHPT4QG",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12,
+        "width": 6.5,
+        "height": 3.75,
+        "weight": 1.0625
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 5.28,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 6.13,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 6.4,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0G27LRQQD",
+      "productType": "WIND_SPINNER",
+      "websiteDisplayGroup": "home_display_on_website",
+      "dims": {
+        "length": 21.5,
+        "width": 21.5,
+        "height": 3.5,
+        "weight": 6.3493
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 13.31,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 14.11,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 14.11,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0CPFVNWXP",
+      "productType": "SANDAL",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 11.1417,
+        "width": 6.9685,
+        "height": 4.1339,
+        "weight": 1.6314
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 5.46,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 6.31,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 6.58,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0GKC853QH",
+      "productType": "SANDAL",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12.5,
+        "width": 7.25,
+        "height": 6.5,
+        "weight": 1.96
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 6.78,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.63,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 7.9,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D28P723T",
+      "productType": "SWEATSHIRT",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 13.7402,
+        "width": 10.0787,
+        "height": 2.4803,
+        "weight": 0.5181
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 6.11,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 6.96,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 7.22,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0GFXSZFB9",
+      "productType": "SANDAL",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 10.8661,
+        "width": 4.6063,
+        "height": 4.0157,
+        "weight": 1.1023
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 4.76,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 5.61,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 5.88,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0DSKD7BKH",
+      "productType": "SHOES",
+      "websiteDisplayGroup": "shoes_display_on_website",
+      "dims": {
+        "length": 12.6,
+        "width": 6.89,
+        "height": 4.25,
+        "weight": 1.5895
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 5.63,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 6.48,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 6.75,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0FLF8FJHY",
+      "productType": "SWIMWEAR",
+      "websiteDisplayGroup": "apparel_display_on_website",
+      "dims": {
+        "length": 7.9134,
+        "width": 7.7559,
+        "height": 2.7559,
+        "weight": 0.463
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.45,
+          "FBAFees": 5.23,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 0.65,
+          "FBAFees": 6.08,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 59.5,
+          "FBAFees": 6.34,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B0D829119P",
+      "productType": "WINDOW_SHADE",
+      "websiteDisplayGroup": "home_display_on_website",
+      "dims": {
+        "length": 68,
+        "width": 6.88,
+        "height": 3,
+        "weight": 17.52
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 1.35,
+          "FBAFees": 33.14,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 33.94,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 33.94,
+          "VariableClosingFee": 0
+        }
+      }
+    },
+    {
+      "asin": "B07TSFHSTX",
+      "productType": "SKIN_CLEANING_AGENT",
+      "websiteDisplayGroup": "office_product_display_on_website",
+      "dims": {
+        "length": 12,
+        "width": 3.8,
+        "height": 3.8,
+        "weight": 3.62
+      },
+      "quotes": {
+        "9": {
+          "ReferralFee": 0.72,
+          "FBAFees": 6.61,
+          "VariableClosingFee": 0
+        },
+        "13": {
+          "ReferralFee": 1.95,
+          "FBAFees": 7.46,
+          "VariableClosingFee": 0
+        },
+        "350": {
+          "ReferralFee": 52.5,
+          "FBAFees": 7.73,
+          "VariableClosingFee": 0
+        }
+      }
+    }
+  ]
+}

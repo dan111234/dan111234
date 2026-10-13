@@ -51,3 +51,20 @@ export interface CatalogDTO {
   listPrice: number | null;
   launchDate: string | null;
 }
+
+/** One SP-API fee quote (FinalFee amounts, i.e. after promotions). */
+export interface FeeQuote {
+  ReferralFee: number;
+  FBAFees: number;
+  VariableClosingFee: number;
+  PerItemFee: number;
+  /** Sum of FeePromotion amounts (already subtracted from the fees above). */
+  Promotion: number;
+}
+
+/** FBA quotes at $9, $13 and $350, one per fulfillment price band (docs/07 §2 fees/tiered). */
+export interface FeesTieredDTO {
+  '9': FeeQuote;
+  '13': FeeQuote;
+  '350': FeeQuote;
+}

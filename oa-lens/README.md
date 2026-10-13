@@ -67,6 +67,8 @@ Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 이 확장만 CORS로 �
 | `pnpm typecheck` / `pnpm lint` / `pnpm format` | 타입 검사 / ESLint / Prettier |
 | `pnpm build` | 확장 zip + Worker 배포 번들(`apps/worker/dist`) |
 | `pnpm deploy:worker` | `wrangler deploy` |
+| `pnpm test:coverage` | core 테스트 커버리지 (90% 미만이면 실패) |
+| `pnpm verify:fees ASIN...` | 로컬 수수료 엔진과 SP-API 견적 대조. 환경 변수 `OA_LENS_WORKER_URL`, `EXT_SHARED_KEY` 필요. 차이가 $0.01을 넘는 행은 빨간색 |
 
 ## RevSeller 화면 스크린샷 (권장)
 똑같은 화면을 만들려면 Claude Code가 참고할 실제 화면이 있어야 정확도가 확 올라갑니다. `docs/reference/screenshots/README.md`의 목록대로 찍어서 그 폴더에 넣어 주세요. 이 폴더는 개인 참고용이라 git에서 제외됩니다.
