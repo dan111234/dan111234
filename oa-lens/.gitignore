@@ -8,3 +8,4 @@ apps/worker/.dev.vars
 .env*
 docs/reference/screenshots/*
 !docs/reference/screenshots/README.md
+coverage/

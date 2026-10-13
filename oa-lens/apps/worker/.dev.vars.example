@@ -1,0 +1,8 @@
+# Copy to .dev.vars (git-ignored) for `pnpm dev:worker`, then fill in the values.
+# In production these are set with `npx wrangler secret put <NAME>` instead.
+LWA_CLIENT_ID=
+LWA_CLIENT_SECRET=
+LWA_REFRESH_TOKEN=
+SELLER_ID=
+KEEPA_API_KEY=
+EXT_SHARED_KEY=

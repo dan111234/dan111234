@@ -1,0 +1,108 @@
+{
+  "asin": "B0TESTCHLD",
+  "attributes": {
+    "brand": [{ "value": "Acme", "marketplace_id": "ATVPDKIKX0DER" }],
+    "item_name": [{ "value": "Acme Widget, Blue, Large", "marketplace_id": "ATVPDKIKX0DER" }],
+    "list_price": [{ "value": 24.99, "currency": "USD", "marketplace_id": "ATVPDKIKX0DER" }],
+    "model_number": [{ "value": "AW-100", "marketplace_id": "ATVPDKIKX0DER" }],
+    "product_site_launch_date": [
+      { "value": "2021-03-15T07:00:01.000Z", "marketplace_id": "ATVPDKIKX0DER" }
+    ]
+  },
+  "dimensions": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "item": {
+        "height": { "unit": "centimeters", "value": 25.4 },
+        "length": { "unit": "centimeters", "value": 50.8 },
+        "width": { "unit": "centimeters", "value": 12.7 },
+        "weight": { "unit": "kilograms", "value": 1 }
+      },
+      "package": {
+        "height": { "unit": "inches", "value": 3.1 },
+        "length": { "unit": "inches", "value": 12.2 },
+        "width": { "unit": "inches", "value": 8.4 },
+        "weight": { "unit": "pounds", "value": 1.35 }
+      }
+    }
+  ],
+  "identifiers": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "identifiers": [
+        { "identifierType": "EAN", "identifier": "0012345678905" },
+        { "identifierType": "UPC", "identifier": "012345678905" },
+        { "identifierType": "UPC", "identifier": "012345678912" },
+        { "identifierType": "UPC", "identifier": "012345678905" }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "images": [
+        {
+          "variant": "PT01",
+          "link": "https://m.media-amazon.com/images/I/pt01.jpg",
+          "height": 500
+        },
+        {
+          "variant": "MAIN",
+          "link": "https://m.media-amazon.com/images/I/main-small.jpg",
+          "height": 75
+        },
+        {
+          "variant": "MAIN",
+          "link": "https://m.media-amazon.com/images/I/main-large.jpg",
+          "height": 1500
+        }
+      ]
+    }
+  ],
+  "productTypes": [{ "marketplaceId": "ATVPDKIKX0DER", "productType": "HOME" }],
+  "relationships": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "relationships": [
+        {
+          "type": "VARIATION",
+          "parentAsins": ["B0TESTPRNT"],
+          "variationTheme": { "attributes": ["color", "size"], "theme": "SIZE_NAME/COLOR_NAME" }
+        }
+      ]
+    }
+  ],
+  "salesRanks": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "classificationRanks": [
+        {
+          "classificationId": "3734591",
+          "title": "Storage Baskets",
+          "rank": 112,
+          "link": "https://www.amazon.com/gp/bestsellers/home-garden/3734591"
+        }
+      ],
+      "displayGroupRanks": [
+        {
+          "websiteDisplayGroup": "home_display_on_website",
+          "title": "Home & Kitchen",
+          "rank": 45210,
+          "link": "https://www.amazon.com/gp/bestsellers/home-garden"
+        }
+      ]
+    }
+  ],
+  "summaries": [
+    {
+      "marketplaceId": "ATVPDKIKX0DER",
+      "brand": "Acme",
+      "itemClassification": "VARIATION_CHILD",
+      "itemName": "Acme Widget, Blue, Large",
+      "manufacturer": "Acme Manufacturing Co.",
+      "modelNumber": "AW-100",
+      "websiteDisplayGroup": "home_display_on_website",
+      "websiteDisplayGroupName": "Home"
+    }
+  ]
+}

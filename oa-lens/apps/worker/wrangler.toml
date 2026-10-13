@@ -1,0 +1,29 @@
+name = "oa-lens"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Comma-separated extension origins allowed by CORS, e.g. "chrome-extension://abcdefghijklmnopabcdefghijklmnop".
+# Leave empty while setting up: any chrome-extension:// origin is accepted (the shared key still applies).
+# `pnpm ext:key` prints the value to put here.
+[vars]
+ALLOWED_ORIGINS = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "oa-lens"
+# Paste the database_id printed by `npx wrangler d1 create oa-lens`.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "CACHE"
+# Paste the id printed by `npx wrangler kv namespace create CACHE`.
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Daily cleanup of history rows older than 30 days (docs/07 §5).
+[triggers]
+crons = ["17 4 * * *"]
+
+[observability]
+enabled = true

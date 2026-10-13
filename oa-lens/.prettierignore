@@ -1,0 +1,7 @@
+docs/
+pnpm-lock.yaml
+.output/
+.wxt/
+.wrangler/
+dist/
+*.md
