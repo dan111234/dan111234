@@ -75,13 +75,20 @@ oa-lens/
    └─ shared/                 ← 타입(ProductData, Settings, API DTO)
 ```
 
-## 명령어 (P0에서 만들 것)
-- `pnpm i`: 설치
-- `pnpm dev:ext`: 확장 개발 모드. `apps/extension/.output/chrome-mv3`를 Chrome "압축해제된 확장 프로그램 로드"로 올린다.
-- `pnpm dev:worker`: `wrangler dev` (로컬 D1·KV)
-- `pnpm test`: core·worker 단위 테스트
-- `pnpm build`: 확장 zip과 Worker 배포용 번들 생성
+## 명령어
+- `pnpm i`: 설치 (확장의 `wxt prepare`까지 실행)
+- `pnpm dev:ext`: 확장 개발 모드(watch). `apps/extension/.output/chrome-mv3-dev`를 Chrome "압축해제된 확장 프로그램 로드"로 올린다. 브라우저를 자동으로 띄우지 않는다.
+- `pnpm dev:worker`: `wrangler dev` (로컬 D1·KV). 처음에는 `pnpm --filter @oa-lens/worker db:migrate:local`
+- `pnpm test`: core·worker·extension 단위 테스트 (Vitest projects)
+- `pnpm typecheck`, `pnpm lint`, `pnpm format`: tsc / ESLint / Prettier
+- `pnpm build`: 확장 zip(`.output/chrome-mv3` + zip)과 Worker 배포용 번들(`apps/worker/dist`) 생성
 - `pnpm deploy:worker`: `wrangler deploy`
+- `pnpm ext:key`: 확장 ID 고정용 manifest key 생성(`apps/extension/.env.local`), Worker `ALLOWED_ORIGINS` 값 출력
+
+## 구현 메모
+- Tailwind는 **v3.4**를 쓴다(prefix `oal-`). v4는 `@property`로 변수를 등록하는데 Shadow DOM 안에서는 동작하지 않는다. `postcss.config.cjs`가 `rem`을 px로 바꾼다(Shadow DOM은 페이지의 html font-size를 따라가기 때문).
+- Worker의 공유키 401에는 `WWW-Authenticate: Bearer`가 붙는다. 확장은 이것으로 "공유키 불일치"와 "SP-API 인증 오류"(같은 401/AUTH)를 구분한다.
+- 확장 테스트는 `WxtVitest` + happy-dom. 아마존 DOM 로직은 `lib/amazonDom.ts`의 순수 함수로 두고 테스트한다.
 
 ## 작업 방식
 - 새 기능을 시작하기 전에 관련 docs 섹션을 다시 읽는다. 스펙 번호(예: `02 §C-3`)를 커밋 메시지나 PR 설명에 적는다.

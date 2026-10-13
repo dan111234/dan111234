@@ -1,4 +1,5 @@
 import type { Env } from '../env';
+import { upstreamFetch } from '../lib/http';
 import { ApiError } from '../lib/errors';
 
 const KEEPA_HOST = 'https://api.keepa.com';
@@ -32,7 +33,7 @@ export async function getKeepaTokenStatus(env: Env): Promise<KeepaQuota> {
   if (!env.KEEPA_API_KEY) throw new ApiError('AUTH', 'KEEPA_API_KEY is not set on the Worker');
   const url = new URL('/token', KEEPA_HOST);
   url.searchParams.set('key', env.KEEPA_API_KEY);
-  const res = await fetch(url);
+  const res = await upstreamFetch('Keepa', url);
   if (!res.ok) {
     // Never echo the URL: it contains the key.
     if (res.status === 400 || res.status === 401 || res.status === 402 || res.status === 403) {

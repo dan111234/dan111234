@@ -1,5 +1,6 @@
 import { MARKETPLACES, type MarketplaceKey } from '@oa-lens/shared';
 import type { Env } from '../env';
+import { upstreamFetch } from '../lib/http';
 import { ApiError, codeForStatus } from '../lib/errors';
 import { getAccessToken } from './lwa';
 
@@ -62,7 +63,7 @@ export async function spapiFetch<T>(env: Env, mp: MarketplaceKey, req: SpapiRequ
   let retries = 0;
 
   for (;;) {
-    const res = await fetch(url, {
+    const res = await upstreamFetch('SP-API', url, {
       method: req.method ?? 'GET',
       headers: {
         'x-amz-access-token': token,

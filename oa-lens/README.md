@@ -20,8 +20,8 @@ RevSeller와 같은 사용감의 개인용 아마존 소싱 확장 프로그램�
 pnpm i
 cd apps/worker
 npx wrangler login
-npx wrangler d1 create oa-lens            # 출력된 database_id를 wrangler.toml에 입력
-npx wrangler kv namespace create CACHE     # 출력된 id를 wrangler.toml에 입력
+npx wrangler d1 create oa-lens            # 출력된 database_id를 wrangler.toml의 REPLACE_WITH_D1_DATABASE_ID 자리에 입력
+npx wrangler kv namespace create CACHE     # 출력된 id를 wrangler.toml의 REPLACE_WITH_KV_NAMESPACE_ID 자리에 입력
 npx wrangler d1 migrations apply oa-lens --remote
 
 # 비밀값 등록 (값은 명령 실행 후 붙여넣기)
@@ -34,14 +34,41 @@ npx wrangler secret put EXT_SHARED_KEY     # 아무 긴 랜덤 문자열. 확장
 npx wrangler deploy
 ```
 
-로컬 개발은 `apps/worker/.dev.vars`에 같은 이름으로 값을 적고 `pnpm dev:worker`를 실행합니다. 이 파일은 git에 올리지 않습니다.
+- `wrangler.toml`에는 바인딩(`DB`, `CACHE`)이 이미 들어 있습니다. `d1 create`/`kv namespace create`가 설정 파일에 바인딩을 추가할지 물으면 **No**를 고르고 id만 복사해 넣으세요.
+- `EXT_SHARED_KEY`는 `openssl rand -hex 32` 등으로 만든 긴 문자열을 쓰세요.
+- 배포가 끝나면 `https://oa-lens.<계정>.workers.dev`가 Worker 주소입니다.
+
+### 로컬 개발 (선택)
+```bash
+cp apps/worker/.dev.vars.example apps/worker/.dev.vars   # 값을 채워 넣기 (git 제외 파일)
+pnpm --filter @oa-lens/worker db:migrate:local
+pnpm dev:worker                                          # http://localhost:8787
+```
+로컬 Worker를 쓸 때는 확장 옵션의 Worker URL에 `http://localhost:8787`을 넣습니다.
+
+### 확장 ID 고정 (권장)
+Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 확장만 CORS로 허용합니다(비어 있으면 모든 확장 허용, 공유키는 항상 필요).
+```bash
+pnpm ext:key        # apps/extension/.env.local에 고정 키를 만들고 확장 ID를 출력
+```
+출력된 `ALLOWED_ORIGINS = "chrome-extension://<ID>"` 줄을 `apps/worker/wrangler.toml`의 `[vars]`에 넣고 `pnpm deploy:worker`로 다시 배포합니다. 이후 확장을 다시 빌드하면 재설치해도 ID가 바뀌지 않습니다.
 
 ## 확장 설치
-1. `pnpm build` 또는 `pnpm dev:ext`를 실행합니다.
+1. `pnpm build`(배포용) 또는 `pnpm dev:ext`(코드 수정 시 자동 새로고침)를 실행합니다.
 2. Chrome 주소창에 `chrome://extensions`를 입력하고 **개발자 모드**를 켭니다.
-3. **압축해제된 확장 프로그램 로드**를 누르고 `apps/extension/.output/chrome-mv3`를 선택합니다.
-4. 확장 옵션 페이지에서 Worker URL과 `EXT_SHARED_KEY`를 입력합니다.
+3. **압축해제된 확장 프로그램 로드**를 누르고 폴더를 선택합니다.
+   - `pnpm build`: `apps/extension/.output/chrome-mv3` (같은 폴더에 `oa-lens-<버전>-chrome.zip`도 생성)
+   - `pnpm dev:ext`: `apps/extension/.output/chrome-mv3-dev`
+4. 확장 옵션 페이지에서 Worker URL과 `EXT_SHARED_KEY`를 입력하고 **연결 테스트**를 누릅니다. "SP-API OK, 셀러 ID 확인"이 나오면 연결 완료입니다.
 5. 아마존 상품 페이지를 열면 상품명 아래에 위젯이 뜹니다.
+
+## 명령어
+| 명령 | 내용 |
+|---|---|
+| `pnpm test` | core·worker·extension 단위 테스트 (Vitest) |
+| `pnpm typecheck` / `pnpm lint` / `pnpm format` | 타입 검사 / ESLint / Prettier |
+| `pnpm build` | 확장 zip + Worker 배포 번들(`apps/worker/dist`) |
+| `pnpm deploy:worker` | `wrangler deploy` |
 
 ## RevSeller 화면 스크린샷 (권장)
 똑같은 화면을 만들려면 Claude Code가 참고할 실제 화면이 있어야 정확도가 확 올라갑니다. `docs/reference/screenshots/README.md`의 목록대로 찍어서 그 폴더에 넣어 주세요. 이 폴더는 개인 참고용이라 git에서 제외됩니다.

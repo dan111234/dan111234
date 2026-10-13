@@ -176,6 +176,21 @@ describe('GET /v1/health', () => {
     expect(body.data.seller?.error?.message).toContain('Access to requested resource is denied');
   });
 
+  it('deep check: unreachable upstreams name the service without leaking the Keepa key', async () => {
+    const fail = () => {
+      throw new TypeError('fetch failed: https://api.keepa.com/token?key=keepa-key');
+    };
+    mockFetch({ [LWA_URL]: fail, [`${KEEPA}/token`]: fail });
+    const { body } = await call<HealthDTO>('/v1/health?deep=1');
+    if (!body.ok) throw new Error('expected ok');
+    expect(body.data.spapi?.error).toEqual({
+      code: 'UPSTREAM',
+      message: 'Cannot reach LWA (api.amazon.com)',
+    });
+    expect(body.data.keepa?.error?.message).toBe('Cannot reach Keepa (api.keepa.com)');
+    expect(JSON.stringify(body)).not.toContain('keepa-key');
+  });
+
   it('deep check: missing Keepa key is reported, not thrown', async () => {
     mockFetch({
       [LWA_URL]: lwaOk,

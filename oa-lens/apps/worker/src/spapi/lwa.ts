@@ -1,4 +1,5 @@
 import type { Env } from '../env';
+import { upstreamFetch } from '../lib/http';
 import { ApiError } from '../lib/errors';
 
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
@@ -38,7 +39,7 @@ export async function getAccessToken(env: Env, options: { fresh?: boolean } = {}
     );
   }
 
-  const res = await fetch(LWA_TOKEN_URL, {
+  const res = await upstreamFetch('LWA', LWA_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
     body: new URLSearchParams({
