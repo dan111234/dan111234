@@ -117,3 +117,19 @@ describe('widget anchor', () => {
     expect(isAtAnchor(host, anchor)).toBe(true);
   });
 });
+
+describe('bought in past month', () => {
+  it('parses the badge text', async () => {
+    const { parseBoughtText } = await import('../lib/amazonDom');
+    expect(parseBoughtText('  1K+ bought in past month ')).toEqual({
+      value: '1K+',
+      period: 'past month',
+    });
+    expect(parseBoughtText('50+ bought in past week')).toEqual({
+      value: '50+',
+      period: 'past week',
+    });
+    expect(parseBoughtText('Bestseller')).toBeNull();
+    expect(parseBoughtText(null)).toBeNull();
+  });
+});

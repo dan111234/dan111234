@@ -16,3 +16,4 @@ export {
   type SizeTier,
   type UspsService,
 } from '../data';
+export * from './product';

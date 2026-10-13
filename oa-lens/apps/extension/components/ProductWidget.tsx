@@ -1,25 +1,45 @@
-import { formatRank } from '@oa-lens/core';
-import type { CatalogDTO, SalesRank } from '@oa-lens/shared';
-import { useCallback, useEffect, useState } from 'preact/hooks';
+// Product page main widget (docs/02). Data comes from the Worker bundle; numbers from packages/core.
+import { calculateProduct, daysSince, formatTopPercent, topPercent } from '@oa-lens/core';
+import {
+  DEFAULT_SETTINGS,
+  type OfferCondition,
+  type ProductBundleDTO,
+  type SalesRank,
+  type Settings,
+} from '@oa-lens/shared';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { BoughtPastMonth } from '../lib/amazonDom';
+import { hazmatBadge, HAZMAT_BLOCKED, HAZMAT_FULFILLABLE } from '../lib/hazmatCodes';
 import { send } from '../lib/messages';
+import {
+  buildProductInput,
+  defaultSellPrice,
+  type CalculatorValues,
+  type ProductOverrides,
+} from '../lib/productInput';
+import { saveSettings, watchSettings } from '../lib/settings';
 import type { ClientError } from '../lib/workerClient';
+import { Calculator, OfferSummary, ProductBox, Targets } from './Calculator';
+import { Header } from './Header';
+import type { WidgetModel } from './model';
+import { SettingsModal, type SettingsTab } from './SettingsModal';
+import { cx, SectionPill } from './ui';
 
 interface Props {
   asin: string | null;
   /** #productTitle text, shown until the catalog title arrives (docs/06: CAT -> DOM). */
   domTitle: string | null;
+  /** "1K+ bought in past month" from the page (docs/06 30d Sales). */
+  bought: BoughtPastMonth | null;
 }
 
-type CatalogState =
+type BundleState =
   | { status: 'loading' }
-  | { status: 'ready'; catalog: CatalogDTO }
+  | { status: 'ready'; bundle: ProductBundleDTO }
   | { status: 'error'; error: ClientError };
 
-type ParentRankState =
-  { status: 'idle' } | { status: 'loading' } | { status: 'ready'; rank: SalesRank | null };
-
 /** docs/02 §L messages. */
-function errorMessage(error: ClientError): string {
+export function errorMessage(error: ClientError): string {
   switch (error.code) {
     case 'NOT_CONFIGURED':
       return '옵션에서 Worker URL과 공유키를 입력하세요';
@@ -40,6 +60,25 @@ function errorMessage(error: ClientError): string {
   }
 }
 
+const FONT_SCALE: Record<Settings['displayFontSize'], number> = {
+  smaller: 0.9,
+  small: 0.95,
+  default: 1,
+  large: 1.05,
+  larger: 1.1,
+};
+
+/** "past month" -> "30d Sales", "past week" -> "7d Sales" (docs/02 §B-2). */
+function salesLabel(bought: BoughtPastMonth | null): string {
+  const period = bought?.period.toLowerCase() ?? 'past month';
+  if (period.includes('week')) return '7d Sales';
+  if (period.includes('year')) return '1y Sales';
+  return '30d Sales';
+}
+
+const EMPTY_VALUES: CalculatorValues = { sellFba: null, sellFbm: null, buyFba: 0, buyFbm: 0 };
+const WIDE_PX = 440;
+
 function Skeleton({ width }: { width: string }) {
   return (
     <span
@@ -49,125 +88,369 @@ function Skeleton({ width }: { width: string }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: preact.ComponentChildren }) {
+function RankLine({ rank, loading }: { rank: SalesRank | null; loading: boolean }) {
+  if (loading) return <Skeleton width="220px" />;
+  if (!rank) return <span class="oal-text-[19px] oal-text-[#565959]">--</span>;
+  const pct = topPercent(rank.rank, rank.category);
   return (
-    <div class="oal-flex oal-gap-2 oal-py-[2px]">
-      <span class="oal-w-[44px] oal-shrink-0 oal-text-[11px] oal-text-gray-500">{label}</span>
-      <span class="oal-min-w-0 oal-flex-1 oal-text-[12px] oal-text-gray-900">{children}</span>
-    </div>
-  );
-}
-
-function RankText({ rank }: { rank: SalesRank }) {
-  return (
-    <span title={rank.category}>
-      <b>{formatRank(rank.rank)}</b> in {rank.category}
+    <span class="oal-flex oal-min-w-0 oal-items-center oal-justify-center oal-gap-[10px]">
+      <span
+        class="oal-truncate oal-text-[19px] oal-font-medium oal-text-[#3d8b37]"
+        title={`#${rank.rank.toLocaleString('en-US')} in ${rank.category}`}
+      >
+        {rank.rank.toLocaleString('en-US')} in {rank.category}
+      </span>
+      {pct != null && (
+        <span
+          class="oal-shrink-0 oal-rounded-[4px] oal-bg-[#eee] oal-px-[6px] oal-py-[2px] oal-text-[12px] oal-text-[#565959]"
+          title="Current rank ÷ estimated number of products in the category. A rough sales-speed guide."
+        >
+          {formatTopPercent(pct)}
+        </span>
+      )}
     </span>
   );
 }
 
-export function ProductWidget({ asin, domTitle }: Props) {
-  const [state, setState] = useState<CatalogState>({ status: 'loading' });
-  const [parentRank, setParentRank] = useState<ParentRankState>({ status: 'idle' });
-  const [reload, setReload] = useState(0);
+function Metric(props: { label: string; value: string; orange?: boolean; title?: string }) {
+  return (
+    <div class="oal-flex oal-flex-col oal-items-center" title={props.title}>
+      <span class="oal-text-[12px] oal-text-[#565959]">{props.label}</span>
+      <span class={cx('oal-text-[13px] oal-font-bold', props.orange && 'oal-text-[#e47911]')}>
+        {props.value}
+      </span>
+    </div>
+  );
+}
+
+export function ProductWidget({ asin, domTitle, bought }: Props) {
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [condition, setCondition] = useState<OfferCondition | null>(null);
+  const [state, setState] = useState<BundleState>({ status: 'loading' });
+  const [parentRank, setParentRank] = useState<SalesRank | null | 'loading'>(null);
+  const [reload, setReload] = useState<{ n: number; fresh: boolean }>({ n: 0, fresh: false });
+  const [values, setValues] = useState<CalculatorValues>(EMPTY_VALUES);
+  const [touched, setTouched] = useState({ sell: false, buy: false });
+  const [linkSell, setLinkSell] = useState(true);
+  const [linkBuy, setLinkBuy] = useState(true);
+  const [overrides, setOverridesState] = useState<ProductOverrides>({});
+  const [targetsOpen, setTargetsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
+  const [wide, setWide] = useState(true);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(
+    () =>
+      watchSettings((s) => {
+        setSettings(s);
+        setSettingsLoaded(true);
+      }),
+    [],
+  );
+
+  // Each product starts from the default condition with fresh inputs.
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    setCondition(settings.defaultCondition);
+    setValues(EMPTY_VALUES);
+    setTouched({ sell: false, buy: false });
+    setOverridesState({});
+  }, [asin, settingsLoaded]);
+
+  useEffect(() => {
+    if (!root.current) return;
+    const ro = new ResizeObserver(([entry]) => setWide((entry?.contentRect.width ?? 0) >= WIDE_PX));
+    ro.observe(root.current);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!asin) {
       setState({ status: 'error', error: { code: 'NOT_FOUND', message: 'No ASIN on this page' } });
       return;
     }
+    if (!condition) return;
     let cancelled = false;
-    setState({ status: 'loading' });
-    setParentRank({ status: 'idle' });
-
+    setState((prev) =>
+      prev.status === 'ready' && prev.bundle.asin === asin ? prev : { status: 'loading' },
+    );
+    setParentRank(null);
     void (async () => {
-      const res = await send({ type: 'catalog', asin });
+      const res = await send({ type: 'product', asin, condition, fresh: reload.fresh });
       if (cancelled) return;
       if (!res.ok) {
         setState({ status: 'error', error: res.error });
         return;
       }
-      setState({ status: 'ready', catalog: res.data });
-
+      setState({ status: 'ready', bundle: res.data });
       // docs/06: a child ASIN without its own rank shows the parent's rank.
-      const parent = res.data.parentAsin;
-      if (!res.data.salesRank && parent && parent !== asin) {
-        setParentRank({ status: 'loading' });
-        const parentRes = await send({ type: 'catalog', asin: parent });
-        if (cancelled) return;
-        setParentRank({ status: 'ready', rank: parentRes.ok ? parentRes.data.salesRank : null });
+      const cat = res.data.catalog.ok ? res.data.catalog.data : null;
+      if (cat && !cat.salesRank && cat.parentAsin && cat.parentAsin !== asin) {
+        setParentRank('loading');
+        const parent = await send({ type: 'catalog', asin: cat.parentAsin });
+        if (!cancelled) setParentRank(parent.ok ? parent.data.salesRank : null);
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [asin, reload]);
+  }, [asin, condition, reload]);
 
-  const retry = useCallback(() => setReload((n) => n + 1), []);
-  const openOptions = useCallback(() => void send({ type: 'openOptions' }), []);
+  const bundle = state.status === 'ready' && state.bundle.asin === asin ? state.bundle : null;
+  const catalog = bundle?.catalog.ok ? bundle.catalog.data : null;
+  const offers = bundle?.offers.ok ? bundle.offers.data : null;
+  const tiered = bundle?.feesTiered.ok ? bundle.feesTiered.data : null;
+  const restrictions = bundle?.restrictions.ok ? bundle.restrictions.data : null;
+  const eligibility = bundle?.eligibility.ok ? bundle.eligibility.data : null;
+  const savedCost = bundle?.buyCost.ok ? bundle.buyCost.data : null;
 
-  const catalog = state.status === 'ready' ? state.catalog : null;
+  // Defaults once the bundle arrives, unless the user already typed (docs/02 §C-2).
+  useEffect(() => {
+    if (!bundle) return;
+    setValues((v) => {
+      const next = { ...v };
+      if (!touched.sell) {
+        next.sellFba = defaultSellPrice(offers, settings.sellPriceOrderFBA);
+        next.sellFbm = defaultSellPrice(offers, settings.sellPriceOrderFBM);
+      }
+      if (!touched.buy) {
+        const list = settings.useListPrice ? (offers?.listPrice ?? catalog?.listPrice ?? 0) : 0;
+        next.buyFba = savedCost?.fba ?? list;
+        next.buyFbm = savedCost?.fbm ?? savedCost?.fba ?? list;
+      }
+      return next;
+    });
+  }, [bundle, settings.sellPriceOrderFBA, settings.sellPriceOrderFBM, settings.useListPrice]);
+
+  // Save the buy cost 0.8 s after the last edit (docs/01 §2-7).
+  useEffect(() => {
+    if (!touched.buy || !asin || !condition || !settings.saveBuycost) return;
+    const t = window.setTimeout(() => {
+      void send({ type: 'saveBuyCost', asin, condition, fba: values.buyFba, fbm: values.buyFbm });
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [values.buyFba, values.buyFbm, touched.buy]);
+
+  const reasons = eligibility?.reasons ?? [];
+  const eligibilityHazmat = reasons.some((r) =>
+    ([...HAZMAT_BLOCKED, ...HAZMAT_FULFILLABLE] as string[]).includes(r),
+  );
+
+  const result = useMemo(
+    () =>
+      calculateProduct(
+        buildProductInput({
+          catalog,
+          tiered,
+          hazmat: eligibilityHazmat,
+          settings,
+          values,
+          overrides,
+        }),
+      ),
+    [catalog, tiered, eligibilityHazmat, settings, values, overrides],
+  );
+
+  const updateSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      const next = { ...settings, ...patch };
+      setSettings(next);
+      void saveSettings(next);
+    },
+    [settings],
+  );
+
+  const model: WidgetModel = {
+    asin: asin ?? '',
+    condition: condition ?? 'new',
+    settings,
+    catalog,
+    offers,
+    result,
+    values,
+    overrides,
+    linkSell,
+    linkBuy,
+    setSell: (column, value) => {
+      setTouched((t) => ({ ...t, sell: true }));
+      setValues((v) =>
+        linkSell
+          ? { ...v, sellFba: value, sellFbm: value }
+          : column === 'fba'
+            ? { ...v, sellFba: value }
+            : { ...v, sellFbm: value },
+      );
+    },
+    setBuy: (column, value) => {
+      const cost = value ?? 0;
+      setTouched((t) => ({ ...t, buy: true }));
+      setValues((v) =>
+        linkBuy
+          ? { ...v, buyFba: cost, buyFbm: cost }
+          : column === 'fba'
+            ? { ...v, buyFba: cost }
+            : { ...v, buyFbm: cost },
+      );
+    },
+    setLinkSell,
+    setLinkBuy,
+    setOverrides: (patch) => setOverridesState((o) => ({ ...o, ...patch })),
+    updateSettings,
+    openSettings: (tab) => setSettingsTab((tab as SettingsTab) ?? 'fba'),
+  };
+
   const loading = state.status === 'loading';
-  const title = catalog?.title ?? domTitle;
-
-  let rank: preact.ComponentChildren;
-  if (loading) rank = <Skeleton width="160px" />;
-  else if (catalog?.salesRank) rank = <RankText rank={catalog.salesRank} />;
-  else if (parentRank.status === 'loading')
-    rank = <span class="oal-text-gray-500">loading parent rank...</span>;
-  else if (parentRank.status === 'ready' && parentRank.rank)
-    rank = (
-      <span>
-        <RankText rank={parentRank.rank} /> <span class="oal-text-gray-500">(parent)</span>
-      </span>
-    );
-  else rank = '--';
+  const rank = catalog?.salesRank ?? (parentRank !== 'loading' ? parentRank : null);
+  const title = catalog?.title ?? domTitle ?? '';
+  const upc = catalog?.identifiers.upc[0] ?? catalog?.identifiers.ean[0] ?? null;
+  const listed = daysSince(catalog?.launchDate ?? null);
+  const restrictionsError = bundle ? !bundle.restrictions.ok : false;
+  const transparency = (restrictions ?? []).some((r) => r.transparency);
+  const fatal = state.status === 'error' ? state.error : null;
+  const partErrors = bundle
+    ? (
+        [
+          ['카탈로그', bundle.catalog],
+          ['오퍼', bundle.offers],
+          ['수수료 견적', bundle.feesTiered],
+        ] as const
+      ).filter(([, p]) => !p.ok)
+    : [];
 
   return (
-    <div class="oal-my-2 oal-overflow-hidden oal-rounded-md oal-border oal-border-gray-300 oal-bg-white oal-font-sans oal-text-[12px] oal-leading-[1.4] oal-text-gray-900">
-      <div class="oal-flex oal-items-center oal-justify-between oal-gap-2 oal-rounded-t-md oal-border-b oal-border-gray-300 oal-bg-gradient-to-b oal-from-gray-50 oal-to-gray-200 oal-px-2 oal-py-1">
-        <span class="oal-text-[12px] oal-font-bold oal-tracking-wide oal-text-gray-700">
-          OA Lens
-        </span>
-        <span class="oal-font-mono oal-text-[11px] oal-text-gray-600" title="Active ASIN">
-          {asin ?? '--'}
-        </span>
-      </div>
+    <div
+      ref={root}
+      class="oal-my-[8px] oal-rounded-[6px] oal-border oal-border-[#d5d9d9] oal-bg-white oal-font-sans oal-text-[13px] oal-leading-[1.35] oal-text-[#0f1111]"
+      style={{ zoom: FONT_SCALE[settings.displayFontSize] }}
+    >
+      <Header
+        asin={asin ?? ''}
+        title={title}
+        upc={upc}
+        restrictions={restrictions}
+        restrictionsError={restrictionsError}
+        used={condition === 'used'}
+        hazmat={hazmatBadge(eligibility, result.kind === 'hazmat' && !eligibilityHazmat)}
+        transparency={transparency}
+        onSettings={() => setSettingsTab('fba')}
+        onOptions={() => void send({ type: 'openOptions' })}
+        onRefreshRestrictions={() => setReload((r) => ({ n: r.n + 1, fresh: true }))}
+      />
 
-      {state.status === 'error' && (
-        <div class="oal-flex oal-items-center oal-justify-between oal-gap-2 oal-bg-red-50 oal-px-2 oal-py-1 oal-text-[12px] oal-text-red-700">
-          <span>{errorMessage(state.error)}</span>
-          {state.error.code === 'NOT_CONFIGURED' || state.error.code === 'KEY_MISMATCH' ? (
-            <button
-              type="button"
-              class="oal-shrink-0 oal-rounded oal-border oal-border-red-300 oal-bg-white oal-px-2 oal-py-[1px] hover:oal-bg-red-100"
-              onClick={openOptions}
-            >
-              옵션 열기
-            </button>
-          ) : (
-            <button
-              type="button"
-              class="oal-shrink-0 oal-rounded oal-border oal-border-red-300 oal-bg-white oal-px-2 oal-py-[1px] hover:oal-bg-red-100"
-              onClick={retry}
-            >
-              재시도
-            </button>
-          )}
+      {fatal && (
+        <div class="oal-flex oal-items-center oal-justify-between oal-gap-2 oal-bg-[#fde8ea] oal-px-[10px] oal-py-[6px] oal-text-[12px] oal-text-[#b12704]">
+          <span>{errorMessage(fatal)}</span>
+          <button
+            type="button"
+            class="oal-shrink-0 oal-rounded oal-border oal-border-[#e5a0a8] oal-bg-white oal-px-2 oal-py-[1px] hover:oal-bg-[#fff5f5]"
+            onClick={() =>
+              fatal.code === 'NOT_CONFIGURED' || fatal.code === 'KEY_MISMATCH'
+                ? void send({ type: 'openOptions' })
+                : setReload((r) => ({ n: r.n + 1, fresh: false }))
+            }
+          >
+            {fatal.code === 'NOT_CONFIGURED' || fatal.code === 'KEY_MISMATCH'
+              ? '옵션 열기'
+              : '재시도'}
+          </button>
+        </div>
+      )}
+      {partErrors.length > 0 && (
+        <div class="oal-flex oal-items-center oal-justify-between oal-gap-2 oal-bg-[#fff8e5] oal-px-[10px] oal-py-[4px] oal-text-[12px] oal-text-[#8a5a00]">
+          <span>
+            {partErrors
+              .map(([name, p]) => `${name}: ${p.ok ? '' : errorMessage(p.error)}`)
+              .join(' · ')}
+          </span>
+          <button
+            type="button"
+            class="oal-shrink-0 oal-underline"
+            onClick={() => setReload((r) => ({ n: r.n + 1, fresh: false }))}
+          >
+            재시도
+          </button>
         </div>
       )}
 
-      <div class="oal-px-2 oal-py-1">
-        <Row label="ASIN">{asin ?? '--'}</Row>
-        <Row label="Title">
-          <span class="oal-line-clamp-2" title={title ?? undefined}>
-            {title ?? (loading ? <Skeleton width="80%" /> : '--')}
-          </span>
-        </Row>
-        <Row label="Brand">{loading ? <Skeleton width="90px" /> : (catalog?.brand ?? '--')}</Row>
-        <Row label="Rank">{rank}</Row>
+      {/* §B top widget */}
+      <div class="oal-relative oal-border-b oal-border-[#e3e6e6] oal-px-[10px] oal-pb-[16px] oal-pt-[12px] oal-text-center">
+        {parentRank === 'loading' && !catalog?.salesRank ? (
+          <span class="oal-text-[#565959]">loading parent rank...</span>
+        ) : (
+          <RankLine rank={rank} loading={loading} />
+        )}
+        <div class="oal-mt-[10px] oal-grid oal-grid-cols-[1fr_1fr_1fr_1px_1fr_1fr] oal-items-center">
+          <Metric label={salesLabel(bought)} value={bought?.value ?? '--'} />
+          <Metric label="30d Drops" value="--" title="Keepa 연동 후 표시 (P3)" />
+          <Metric label="90d Rank" value="--" title="Keepa 연동 후 표시 (P3)" />
+          <span class="oal-h-[28px] oal-bg-[#e3e6e6]" />
+          <Metric
+            label={condition === 'used' ? '90d Used' : '90d 3p'}
+            value="--"
+            title="Keepa 연동 후 표시 (P3)"
+          />
+          <Metric label="90d Amz" value="--" orange title="Keepa 연동 후 표시 (P3)" />
+        </div>
       </div>
+
+      {/* §C calculator + §D product box */}
+      <div
+        class={cx(
+          'oal-flex oal-gap-[8px] oal-px-[8px] oal-py-[12px]',
+          wide ? 'oal-flex-row' : 'oal-flex-col',
+        )}
+      >
+        <div class="oal-min-w-0 oal-flex-1">
+          <Calculator model={model} />
+        </div>
+        <div class={cx(wide ? 'oal-w-[36%] oal-min-w-[168px] oal-shrink-0' : 'oal-w-full')}>
+          <ProductBox model={model} listedDays={listed} />
+        </div>
+      </div>
+
+      {/* §E Targets */}
+      <div class="oal-relative oal-border-t oal-border-[#e3e6e6]">
+        <SectionPill
+          label="Targets"
+          open={targetsOpen}
+          onToggle={() => setTargetsOpen(!targetsOpen)}
+          class="oal-absolute oal-left-[8px] oal-top-[-10px]"
+        />
+        <div class={cx(targetsOpen ? 'oal-pt-[16px]' : 'oal-pt-[4px]')}>
+          {targetsOpen && <Targets model={model} />}
+        </div>
+      </div>
+
+      {/* §F offer line */}
+      <div class="oal-border-t oal-border-[#e3e6e6]">
+        <OfferSummary model={model} />
+      </div>
+
+      {/* §H bottom bar */}
+      <div class="oal-flex oal-items-center oal-justify-center oal-rounded-b-[6px] oal-border-t oal-border-[#e3e6e6] oal-px-[10px] oal-py-[6px]">
+        <button
+          type="button"
+          title="Switch between New and Used offers"
+          class="oal-rounded-[4px] oal-px-[10px] oal-py-[2px] oal-text-[12px] oal-font-bold hover:oal-bg-[#f0f0f0]"
+          onClick={() => setCondition(condition === 'used' ? 'new' : 'used')}
+        >
+          {condition === 'used' ? 'Used' : 'New'}
+        </button>
+      </div>
+
+      {settingsTab && (
+        <SettingsModal
+          settings={settings}
+          tab={settingsTab}
+          onTab={setSettingsTab}
+          onChange={(next) => {
+            setSettings(next);
+            void saveSettings(next);
+          }}
+          onClose={() => setSettingsTab(null)}
+        />
+      )}
     </div>
   );
 }

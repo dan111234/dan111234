@@ -10,7 +10,7 @@
     "db:migrate:local": "wrangler d1 migrations apply oa-lens --local",
     "db:migrate:remote": "wrangler d1 migrations apply oa-lens --remote",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test"
   },
   "dependencies": {
     "@oa-lens/core": "workspace:*",

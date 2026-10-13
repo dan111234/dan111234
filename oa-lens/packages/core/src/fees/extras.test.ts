@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cubicFeet,
+  ltsfRows,
   DEFAULT_PREP_CHIPS,
   lowInventoryFee,
   placementFee,
@@ -166,5 +167,17 @@ describe('FBM shipping', () => {
     expect(
       mfnShippingFee({ dims, tier, method: { ...usps, priorityForHazmat: true }, hazmat: true }),
     ).toBe(uspsPrice('priority', 5, 2));
+  });
+});
+
+describe('ltsfRows', () => {
+  it('matches the RevSeller LTSF popup for 0.331 cu ft (screenshot 07b)', () => {
+    const rows = ltsfRows(0.331);
+    expect(rows.map((r) => r.monthly)).toEqual([0.17, 0.33, 0.5, 1.8, 1.89, 1.95, 2.28, 2.61]);
+    expect(rows[0]).toMatchObject({ days: '181-210 days', perCubicFoot: 0.5, minPerUnit: null });
+    expect(rows[6]).toMatchObject({ days: '366-455 days', perCubicFoot: 6.9, minPerUnit: 0.3 });
+  });
+  it('applies the per-unit minimum to tiny items', () => {
+    expect(ltsfRows(0.01).at(-1)!.monthly).toBe(0.35);
   });
 });

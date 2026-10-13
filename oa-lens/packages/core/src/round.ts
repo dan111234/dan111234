@@ -9,3 +9,8 @@ export function round2(value: number): number {
 export function floor2(value: number): number {
   return Math.floor(Number((value * 100).toFixed(6))) / 100;
 }
+
+/** Rounds up to the next cent (min sell prices: the target must still be met at that price). */
+export function ceil2(value: number): number {
+  return Math.ceil(Number((value * 100).toFixed(6))) / 100;
+}

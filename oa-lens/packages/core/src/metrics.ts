@@ -20,12 +20,15 @@ export function formatTopPercent(pct: number | null): string {
   return `${fixed === '0.00' ? '0.01' : fixed}%`;
 }
 
-/** FBA offers priced within `percent`% of the lowest FBA price. */
+/**
+ * Other FBA offers priced within `percent`% of the lowest FBA price (the lowest offer itself is not
+ * counted: RevSeller shows 0 for B0FBP3N9RK, whose only other FBA offer is 21% higher).
+ */
 export function closeFbaOfferCount(fbaPrices: number[], percent: number): number {
   if (fbaPrices.length === 0) return 0;
   const low = Math.min(...fbaPrices);
   const limit = low * (1 + percent / 100) + 1e-9;
-  return fbaPrices.filter((p) => p <= limit).length;
+  return fbaPrices.filter((p) => p <= limit).length - 1;
 }
 
 /** Whole days since `since` (Unix ms or ISO date). */

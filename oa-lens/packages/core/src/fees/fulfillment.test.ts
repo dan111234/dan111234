@@ -123,23 +123,45 @@ describe('resolveFulfillmentFee', () => {
     today: AFTER_SURCHARGE,
   };
 
-  it("uses the API quote for today's period with catalog dims, noting a local difference", () => {
+  it("uses the API quote for today's period with catalog dims", () => {
     expect(resolveFulfillmentFee({ ...base, period: 'nonPeak' })).toEqual({
       fee: 7.6,
       source: 'api',
-      localDiff: 7.57,
+      offset: 0.03,
     });
     expect(resolveFulfillmentFee({ ...base, period: 'nonPeak', price: 12 })).toEqual({
       fee: 7.3,
       source: 'api',
+      offset: 0,
     });
   });
 
-  it('uses the local table for the other period', () => {
+  it('adds the API offset to the local table for the other period', () => {
+    // Local Peak 8.12 + (7.60 − 7.57).
     expect(resolveFulfillmentFee({ ...base, period: 'peak' })).toEqual({
-      fee: 8.12,
-      source: 'local',
+      fee: 8.15,
+      source: 'offset',
+      offset: 0.03,
     });
+  });
+
+  it('matches RevSeller for B0HC235K4R (billed $0.11 over the table): Peak 8.57', () => {
+    const mug = d(10.67, 9.45, 5.67, 3.85);
+    const q = { VariableClosingFee: 0, PerItemFee: 0, Promotion: 0 };
+    const quotes: FeesTieredDTO = {
+      '9': { ...q, ReferralFee: 1.35, FBAFees: 6.89 },
+      '13': { ...q, ReferralFee: 1.95, FBAFees: 7.74 },
+      '350': { ...q, ReferralFee: 52.5, FBAFees: 8.01 },
+    };
+    const input = {
+      ...base,
+      dims: mug,
+      catalogDims: mug,
+      tiered: quotes,
+      price: 199.99,
+    };
+    expect(resolveFulfillmentFee({ ...input, period: 'nonPeak' }).fee).toBe(8.01);
+    expect(resolveFulfillmentFee({ ...input, period: 'peak' }).fee).toBe(8.57);
   });
 
   it('uses the local table when the dims were edited', () => {

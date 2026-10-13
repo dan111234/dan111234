@@ -1,4 +1,11 @@
-import type { CatalogDTO, HealthDTO } from '@oa-lens/shared';
+import type {
+  BuyCostDTO,
+  CatalogDTO,
+  HealthDTO,
+  OfferCondition,
+  PrepDTO,
+  ProductBundleDTO,
+} from '@oa-lens/shared';
 import { browser } from 'wxt/browser';
 import { clientError, type ClientResult } from './workerClient';
 
@@ -7,11 +14,23 @@ import { clientError, type ClientResult } from './workerClient';
 export type Request =
   | { type: 'health'; deep: boolean }
   | { type: 'catalog'; asin: string; fresh?: boolean }
+  | { type: 'product'; asin: string; condition: OfferCondition; fresh?: boolean }
+  | { type: 'prep'; asin: string }
+  | {
+      type: 'saveBuyCost';
+      asin: string;
+      condition: OfferCondition;
+      fba: number | null;
+      fbm: number | null;
+    }
   | { type: 'openOptions' };
 
 export interface ResponseMap {
   health: ClientResult<HealthDTO>;
   catalog: ClientResult<CatalogDTO>;
+  product: ClientResult<ProductBundleDTO>;
+  prep: ClientResult<PrepDTO>;
+  saveBuyCost: ClientResult<BuyCostDTO>;
   openOptions: { ok: true };
 }
 

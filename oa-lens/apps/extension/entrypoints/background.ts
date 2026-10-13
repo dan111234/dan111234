@@ -1,4 +1,4 @@
-import type { CatalogDTO, HealthDTO } from '@oa-lens/shared';
+import type { BuyCostDTO, CatalogDTO, HealthDTO, PrepDTO, ProductBundleDTO } from '@oa-lens/shared';
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import type { Request, ResponseFor } from '../lib/messages';
@@ -8,10 +8,16 @@ import { loadWorkerConfig } from '../lib/settings';
 import { clientError, workerFetch } from '../lib/workerClient';
 
 const CATALOG_TTL_MS = 10 * 60 * 1000;
+/** Offers inside the bundle change quickly; the Worker caches them for 3 minutes. */
+const PRODUCT_TTL_MS = 2 * 60 * 1000;
+const PREP_TTL_MS = 60 * 60 * 1000;
 
 // docs/01 §4: getCatalogItem — 2 at a time, 500ms apart.
 const queues = {
   catalog: new RequestQueue({ concurrency: 2, intervalMs: 500 }),
+  // The bundle calls getItemOffers (0.5/s) and getMyFeesEstimates (0.5/s) on cache misses.
+  product: new RequestQueue({ concurrency: 1, intervalMs: 1000 }),
+  userdata: new RequestQueue({ concurrency: 2, intervalMs: 0 }),
 };
 
 const cache = new ResponseCache({
@@ -46,6 +52,42 @@ async function handle(request: Request): Promise<ResponseFor<Request>> {
           ),
         { fresh: request.fresh },
       );
+    }
+    case 'product': {
+      const config = await loadWorkerConfig();
+      const asin = request.asin.toUpperCase();
+      const query = `?condition=${request.condition}${request.fresh ? '&fresh=1' : ''}`;
+      return cache.getOrLoad(
+        `product:us:${asin}:${request.condition}`,
+        PRODUCT_TTL_MS,
+        () =>
+          queues.product.run(() =>
+            workerFetch<ProductBundleDTO>(config, `/v1/us/product/${asin}${query}`, {
+              timeoutMs: 30_000,
+            }),
+          ),
+        { fresh: request.fresh },
+      );
+    }
+    case 'prep': {
+      const config = await loadWorkerConfig();
+      const asin = request.asin.toUpperCase();
+      return cache.getOrLoad(`prep:us:${asin}`, PREP_TTL_MS, () =>
+        workerFetch<PrepDTO>(config, `/v1/us/spapi/prep/${asin}`),
+      );
+    }
+    case 'saveBuyCost': {
+      const config = await loadWorkerConfig();
+      const asin = request.asin.toUpperCase();
+      const result = await queues.userdata.run(() =>
+        workerFetch<BuyCostDTO>(config, `/v1/userdata/buycost/${asin}`, {
+          method: 'PUT',
+          body: { fba: request.fba, fbm: request.fbm, condition: request.condition },
+        }),
+      );
+      // The cached bundle still holds the old cost.
+      if (result.ok) cache.delete(`product:us:${asin}:${request.condition}`);
+      return result;
     }
     case 'openOptions':
       await browser.runtime.openOptionsPage();

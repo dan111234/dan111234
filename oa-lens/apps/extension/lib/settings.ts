@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS, mergeSettings, type Settings } from '@oa-lens/shared';
 import { storage } from 'wxt/utils/storage';
 
 // Connection settings for the Worker (docs/03 §I). Kept in chrome.storage.local on this device.
@@ -30,3 +31,22 @@ export async function loadWorkerConfig(): Promise<WorkerConfig | null> {
   if (!normalized || !key.trim()) return null;
   return { url: normalized, key: key.trim() };
 }
+
+/** Calculator settings (docs/05), merged over the defaults on every read. */
+export const settingsItem = storage.defineItem<unknown>('local:settings', { fallback: {} });
+
+export async function loadSettings(): Promise<Settings> {
+  return mergeSettings(await settingsItem.getValue());
+}
+
+export async function saveSettings(settings: Settings): Promise<void> {
+  await settingsItem.setValue(settings);
+}
+
+/** Calls `cb` with the merged settings now and whenever they change (other tabs included). */
+export function watchSettings(cb: (settings: Settings) => void): () => void {
+  void loadSettings().then(cb);
+  return settingsItem.watch((value) => cb(mergeSettings(value)));
+}
+
+export { DEFAULT_SETTINGS };

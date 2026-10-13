@@ -23,7 +23,7 @@
    - Small Standard의 무게 한도는 Media/Non-Media로 나뉜다. Media 카테고리는 Books, Video & DVD, Music, Software & Computer/Video Games, Video, Video Games
 3. Standard 티어 이름에는 " Media" 또는 " Non-Media"를 붙인다. 아무 티어에도 맞지 않으면 "Unknown"이다.
 4. Overmax: Extra Large 티어 중 longest > 96in 또는 lengthGirth > 130in이면 `overmaxFeeTable`의 추가 요금을 더한다.
-5. 화면용 약어: Small Standard → `Sm Std`, Large Standard → `Lg Std`, Small Bulky → `Sm Bulky`, Large Bulky → `Lg Bulky`, Extra Large → `XL {구간}`.
+5. 화면용 약어: Small Standard → `Sm Standard`, Large Standard → `Lg Standard`(스크린샷 01), Small Bulky → `Sm Bulky`, Large Bulky → `Lg Bulky`, Extra Large → `XL {구간}`.
 
 ### §2-2. 무게
 - 치수 무게(dimWeight) = L × W × H / 139. Bulky·Extra Large 티어는 W와 H가 2in보다 작으면 2in으로 보고 계산한다.
@@ -45,7 +45,7 @@
 상세페이지를 열면 Worker가 `getMyFeesEstimates`로 가격 $9, $13, $350에서 FBA 견적을 받아온다(07 §2 `fees/tiered`). 이 값이 각 가격대(<$10, $10–50, >$50)의 **정답 풀필먼트 수수료**다.
 1. 무게·치수가 카탈로그 원래 값과 같고, 지금 보려는 기간(Peak/Non-Peak)이 오늘 날짜의 기간과 같으면 → **API 값을 쓴다**(P의 가격대에 맞는 견적)
 2. 사용자가 무게·치수를 바꿨으면 → 로컬 표
-3. 오늘과 다른 기간(예: 지금은 Non-Peak인데 Peak 열을 계산할 때)이면 → 로컬 표
+3. 오늘과 다른 기간(예: 지금은 Non-Peak인데 Peak 열을 계산할 때)이면 → 로컬 표 + (오늘 기간의 API 값 − 오늘 기간의 로컬 표 값). 같은 가격대끼리 뺀다. RevSeller가 이렇게 계산한다: B0HC235K4R은 API가 표보다 $0.11 높고(8.01 vs 7.90), Peak 열은 8.46 + 0.11 = 8.57(스크린샷 04)
 4. 위험물 판정: 로컬 위험물 표로 계산한 값이 API 값과 같으면 위험물로 본다. 이후 보관료와 입고 배송비에 위험물 단가를 쓰고, Haz 배지 판단에도 쓴다
 5. 의류 판정: 수수료 요율이 Clothing & Accessories 규칙과 같고, 의류 표로 계산한 값이 API와 같으면 의류 표를 쓴다
 6. 로컬과 API 값이 다르면 콘솔에 기록하고 API 값을 쓴다. `pnpm verify:fees`로 차이를 모아 표를 고친다
@@ -149,7 +149,9 @@ ROI = Net ÷ 분모. Margin = Net ÷ P. 표시 소수점은 설정 `decimalProfi
   - range + portion: 구간을 차례로 보며 누적 수수료를 더해 P가 들어가는 구간을 찾고, 그 구간에서 P = (S − from·pct + 누적) / (1 − pct)
   - range 전체 요율: 각 구간 요율로 P를 구해 그 P가 해당 구간 안에 들어오는 첫 해를 쓴다
   - fixed: P = S + fixed
-- **가격대 보정**: 구한 P가 현재 판매가와 다른 풀필먼트 가격대(<$10 / $10–50 / >$50)에 들어가면, 새 가격대의 풀필먼트 수수료와의 차이를 S에 더해 한 번 더 푼다
+- **가격대 보정**: 구한 P가 현재 판매가와 다른 풀필먼트 가격대(<$10 / $10–50 / >$50)에 들어가면, 새 가격대의 풀필먼트 수수료와의 차이를 S에 더해 **딱 한 번만** 더 푼다. 그 답이 또 다른 가격대여도 멈춘다(RevSeller: B0FBP3N9RK Breakeven $9.96은 $10–50 가격대 수수료로 계산한 값)
+- **반올림**: Min Sell·Breakeven Price는 센트 단위 **올림**, Max Buy는 센트 단위 **내림**(목표를 지키는 쪽). RevSeller 화면 값 $9.96(9.9529), $10.70(10.694), $12.16(12.153)으로 확인
+- **Targets 표**: ROI·Margin 목표의 Sell 칸은 매입가가 0이면 `--`(스크린샷 02)
 
 **Max Cost 칸** (설정 Max Buy Cost Rules)
 - 켜진 규칙(값이 0이 아닌 것)마다 Max Buy를 계산해 **가장 작은 값**을 쓴다. 어떤 규칙이 기준이 되었는지(`net`/`roi`/`margin`)도 함께 돌려준다
@@ -176,7 +178,7 @@ ROI = Net ÷ 분모. Margin = Net ÷ P. 표시 소수점은 설정 `decimalProfi
 - **평균 가격·랭크**: Keepa `stats.avg30/avg90/avg180`의 해당 인덱스(0 AMAZON, 1 NEW, 2 USED, 3 SALES, 10 NEW_FBA, 18 BUY_BOX_SHIPPING 등). 가격은 센트 단위라 ÷100. 값이 −1이면 `--`
 - **OOS 비율**: Keepa `stats.outOfStockPercentage30/90`(Amazon=인덱스 0, 3P New=인덱스 1)
 - **Top %**: rank ÷ 카테고리 전체 상품 수 × 100. 5% 이상이면 올림 정수, 미만이면 소수 둘째 자리. 0.00이면 0.01로 표시. 전체 상품 수는 `category-tables-us.json`의 `totalProductsTable`(추정치). 나중에 Keepa category 요청의 productCount로 갱신할 수 있다
-- **Low FBA 근접 오퍼 수**: Low FBA 가격 × (1 + x%) 이하인 FBA 오퍼 수. x는 설정 `closeFBAPercent`(1~3)
+- **Low FBA 근접 오퍼 수**: Low FBA 가격 × (1 + x%) 이하인 FBA 오퍼 수(최저가 오퍼 자신은 세지 않는다. RevSeller가 0으로 표시, 스크린샷 01). x는 설정 `closeFBAPercent`(1~3)
 - **등록 경과일**: 오늘 − (Keepa `listedSince` 또는 카탈로그 `product_site_launch_date`)
 
 ## §8. 수수료 절감 알림 (Fee Savings, 초록 $ 아이콘)
@@ -203,7 +205,7 @@ ROI = Net ÷ 분모. Margin = Net ÷ P. 표시 소수점은 설정 `decimalProfi
 | Margin | 32.57% ("33%") |
 | Max Buy (Net ≥ $3) | 13.14 |
 | Breakeven Cost | 16.14 |
-| Breakeven Price | 15.41 (S = 8.00 + 5.10 = 13.10, 13.10 / 0.85 = 15.4118) |
+| Breakeven Price | 15.42 (S = 8.00 + 5.10 = 13.10, 13.10 / 0.85 = 15.4118 → 센트 올림. 처음 스펙의 15.41은 RevSeller 화면과 달라 고쳤다) |
 | Min Sell (ROI 50%) | 20.12 (검산: Referral 3.02, Fees 8.12, Net 4.00) |
 | Max Buy (Margin 20%) | 11.14 |
 | t = 7%일 때 Tax | 0.56 |

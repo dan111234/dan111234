@@ -5,7 +5,9 @@ import { allowedOrigin, bearerAuth } from './lib/auth';
 import { ApiError, toApiError } from './lib/errors';
 import { failBody } from './lib/respond';
 import { healthRoutes } from './routes/health';
+import { productRoutes } from './routes/product';
 import { spapiRoutes } from './routes/spapi';
+import { userdataRoutes } from './routes/userdata';
 
 export function createApp() {
   const app = new Hono<AppEnv>();
@@ -24,7 +26,9 @@ export function createApp() {
   app.use('/v1/*', bearerAuth);
 
   app.route('/v1', healthRoutes);
+  app.route('/v1/userdata', userdataRoutes);
   app.route('/v1/:mp/spapi', spapiRoutes);
+  app.route('/v1/:mp/product', productRoutes);
 
   app.notFound((c) => c.json(failBody(new ApiError('NOT_FOUND', 'Route not found')), 404));
   app.onError((err, c) => {

@@ -1,3 +1,5 @@
+import type { PartResult } from './api';
+
 // Normalized DTOs returned by the Worker. Field sources: docs/06.
 
 /** Inches and pounds. A field is null when Amazon did not provide it. */
@@ -67,4 +69,89 @@ export interface FeesTieredDTO {
   '9': FeeQuote;
   '13': FeeQuote;
   '350': FeeQuote;
+}
+
+export type OfferCondition = 'new' | 'used';
+
+/** One offer from getItemOffers (top 20 by Amazon's order). */
+export interface OfferDTO {
+  sellerId: string;
+  fba: boolean;
+  /** Sold by Amazon itself. */
+  amazon: boolean;
+  price: number;
+  shipping: number;
+  landed: number;
+  buyBoxWinner: boolean;
+  prime: boolean;
+  feedbackCount: number | null;
+  feedbackPct: number | null;
+  shipMinHours: number | null;
+  shipMaxHours: number | null;
+  subCondition: string | null;
+}
+
+/** Normalized getItemOffers result (docs/06 offer summary). Prices are landed (price + shipping). */
+export interface OffersDTO {
+  asin: string;
+  condition: OfferCondition;
+  counts: { fba: number; fbm: number; total: number };
+  lowestFba: number | null;
+  lowestFbm: number | null;
+  buyBox: number | null;
+  buyBoxEligible: { fba: number; fbm: number };
+  /** Amazon's own offer price, if Amazon sells it. */
+  amazon: number | null;
+  listPrice: number | null;
+  /** Competitive Price Threshold, when Amazon returns one. */
+  cpt: number | null;
+  offers: OfferDTO[];
+}
+
+export type RestrictionStatus = 'sell' | 'approval' | 'restricted' | 'unknown';
+
+export interface RestrictionLink {
+  url: string;
+  title: string;
+}
+
+/** Listings Restrictions for one condition type (docs/06 Sell/Appr/Rstr). */
+export interface RestrictionDTO {
+  conditionType: string;
+  status: RestrictionStatus;
+  reasons: { code: string; message: string; links: RestrictionLink[] }[];
+  /** A reason mentions Transparency codes (Tp badge). */
+  transparency: boolean;
+}
+
+/** FBA inbound eligibility (docs/06 Haz, FBA warning). */
+export interface EligibilityDTO {
+  eligible: boolean;
+  reasons: string[];
+}
+
+export interface PrepDTO {
+  /** e.g. ["Polybagging", "Labeling"]; empty = None Listed. */
+  instructions: string[];
+}
+
+export interface BuyCostDTO {
+  asin: string;
+  condition: OfferCondition;
+  fba: number | null;
+  fbm: number | null;
+  updatedAt: number;
+}
+
+/** GET /v1/{mp}/product/{asin} (docs/07 §3). */
+export interface ProductBundleDTO {
+  asin: string;
+  condition: OfferCondition;
+  catalog: PartResult<CatalogDTO>;
+  offers: PartResult<OffersDTO>;
+  feesTiered: PartResult<FeesTieredDTO>;
+  /** New: one entry (new_new). Used: like new, very good, good, acceptable. */
+  restrictions: PartResult<RestrictionDTO[]>;
+  eligibility: PartResult<EligibilityDTO>;
+  buyCost: PartResult<BuyCostDTO | null>;
 }

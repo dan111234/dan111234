@@ -59,4 +59,10 @@ export class ResponseCache {
       if (this.inflight.get(key) === promise) this.inflight.delete(key);
     }
   }
+
+  /** Forgets a key in both layers (the persistent entry is overwritten as expired). */
+  delete(key: string): void {
+    this.memory.delete(key);
+    void this.store?.set(key, { value: null, expiresAt: 0 }).catch(() => undefined);
+  }
 }

@@ -8,6 +8,7 @@ import {
   type FeePeriod,
   type FulfillmentKind,
 } from './fulfillment';
+import { round2 } from '../round';
 import type { Dims } from './sizeTier';
 
 /** Quote price for each fulfillment price band. */
@@ -68,14 +69,22 @@ export function detectFulfillmentKind(input: KindInput): KindDetection {
 
 export interface FulfillmentResolution {
   fee: number | null;
-  source: 'api' | 'local';
-  /** Local table value when it disagrees with the API quote that was used. */
-  localDiff?: number | null;
+  /**
+   * api: today's SP-API quote. offset: the local table for the other period plus today's
+   * API − local difference. local: the local table only (edited dims or no quotes).
+   */
+  source: 'api' | 'offset' | 'local';
+  /** API − local for today's period at this price band, when quotes were used. */
+  offset?: number;
 }
 
 /**
- * Fulfillment fee for one price and period. The API quote wins when the dimensions are the catalog
- * ones and the period is today's; otherwise the local table (docs/04 §2-4 rules 1–3, 6).
+ * Fulfillment fee for one price and period (docs/04 §2-4).
+ * - Catalog dims and today's period: the API quote.
+ * - Catalog dims, other period: local table + (API − local) of today's period. RevSeller does
+ *   this: B0HC235K4R is billed $0.11 over the table (8.01 vs 7.90) and its Peak column shows
+ *   8.46 + 0.11 = 8.57.
+ * - Edited dims or no quotes: local table.
  */
 export function resolveFulfillmentFee(input: {
   tier: SizeTier;
@@ -91,13 +100,16 @@ export function resolveFulfillmentFee(input: {
 }): FulfillmentResolution {
   const today = input.today ?? new Date();
   const local = localFulfillmentFee({ ...input, date: today });
-  const useApi =
-    input.tiered != null &&
-    sameDims(input.dims, input.catalogDims) &&
-    input.period === periodForDate(today);
-  if (!useApi) return { fee: local, source: 'local' };
-  const api = input.tiered![BAND_QUOTE[priceBand(input.price)]].FBAFees;
-  return local != null && Math.abs(local - api) >= 0.005
-    ? { fee: api, source: 'api', localDiff: local }
-    : { fee: api, source: 'api' };
+  if (input.tiered == null || !sameDims(input.dims, input.catalogDims)) {
+    return { fee: local, source: 'local' };
+  }
+  const api = input.tiered[BAND_QUOTE[priceBand(input.price)]].FBAFees;
+  const todayPeriod = periodForDate(today);
+  const localToday =
+    input.period === todayPeriod
+      ? local
+      : localFulfillmentFee({ ...input, period: todayPeriod, date: today });
+  const offset = localToday == null ? 0 : round2(api - localToday);
+  if (input.period === todayPeriod) return { fee: api, source: 'api', offset };
+  return { fee: local == null ? null : round2(local + offset), source: 'offset', offset };
 }

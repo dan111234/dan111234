@@ -63,8 +63,8 @@ describe('sizeTier', () => {
 
 describe('labels', () => {
   it('short names', () => {
-    expect(tierShortName('Small Standard-Size')).toBe('Sm Std');
-    expect(tierShortName('Large Standard-Size')).toBe('Lg Std');
+    expect(tierShortName('Small Standard-Size')).toBe('Sm Standard');
+    expect(tierShortName('Large Standard-Size')).toBe('Lg Standard');
     expect(tierShortName('Small Bulky')).toBe('Sm Bulky');
     expect(tierShortName('Large Bulky')).toBe('Lg Bulky');
     expect(tierShortName('Extra Large 0 to 50lb')).toBe('XL 0 to 50lb');

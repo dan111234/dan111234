@@ -14,6 +14,12 @@ export const SELECTORS = {
     '#averageCustomerReviews[data-asin]',
   ],
   title: ['#productTitle', '#title', '#title_feature_div h1'],
+  /** "1K+ bought in past month" badge (docs/06 30d Sales). */
+  boughtPastMonth: [
+    '#social-proofing-faceout-title-tk_bought',
+    '#socialProofingAsinFaceout_feature_div .social-proofing-faceout-title-text',
+    '[id^="social-proofing-faceout-title"]',
+  ],
 } as const;
 
 /** docs/01 §3: insert right below the title block; first match wins. */
@@ -78,4 +84,23 @@ export function isAtAnchor(host: Element, anchor: WidgetAnchor): boolean {
 export function insertAtAnchor(host: Element, anchor: WidgetAnchor): void {
   if (anchor.append === 'after') anchor.element.after(host);
   else anchor.element.prepend(host);
+}
+
+export interface BoughtPastMonth {
+  /** e.g. "1K+" */
+  value: string;
+  /** e.g. "past month" */
+  period: string;
+}
+
+/** Parses "1K+ bought in past month" into value and period. */
+export function parseBoughtText(text: string | null | undefined): BoughtPastMonth | null {
+  const m = /([\d.,]+\s*[KkMm]?\+?)\s+bought\s+in\s+(.+?)\s*$/i.exec(
+    (text ?? '').replace(/\s+/g, ' ').trim(),
+  );
+  return m ? { value: m[1]!.replace(/\s+/g, '').toUpperCase(), period: m[2]! } : null;
+}
+
+export function readBoughtPastMonth(doc: Document): BoughtPastMonth | null {
+  return parseBoughtText(queryFirst(doc, SELECTORS.boughtPastMonth)?.textContent);
 }

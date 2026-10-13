@@ -44,7 +44,9 @@ describe('golden: profit (docs/04 §10-1)', () => {
   it('Max Buy and breakevens', () => {
     expect(maxBuyCost(golden, P, { metric: 'net', value: 3 })).toBe(13.14);
     expect(breakevenCost(golden, P)).toBe(16.14);
-    expect(breakevenPrice(golden, P)).toBe(15.41);
+    // 13.10 / 0.85 = 15.4118. docs/04 §10-1 says 15.41; RevSeller rounds min sell prices up
+    // (screenshots 01/06/07b), so 15.42.
+    expect(breakevenPrice(golden, P)).toBe(15.42);
     expect(maxBuyCost(golden, P, { metric: 'margin', value: 0.2 })).toBe(11.14);
   });
   it('Min Sell for ROI 50% checks out', () => {
@@ -100,7 +102,7 @@ describe('discount and tax', () => {
   it('Max Buy is the pre-discount cost', () => {
     const m = { ...golden, discount: 0.2 };
     const cost = maxBuyCost(m, P, { metric: 'net', value: 3 })!;
-    expect(cost).toBe(16.43); // 13.14 / 0.8
+    expect(cost).toBe(16.42); // 13.14 / 0.8 = 16.425, rounded down
     expect(computeProfit(m, P, cost).net).toBeCloseTo(3, 1);
   });
   it('Max Buy includes tax', () => {
@@ -150,7 +152,7 @@ describe('Targets', () => {
   });
   it('rows meet their target', () => {
     const rows = targetsTable(golden, P, 'net', [0, 2]);
-    expect(rows[0]).toEqual({ target: 0, minSell: 15.41, maxBuy: 16.14 });
+    expect(rows[0]).toEqual({ target: 0, minSell: 15.42, maxBuy: 16.14 });
     expect(computeProfit(golden, rows[1]!.minSell!).net).toBeCloseTo(2, 1);
     const roi = targetsTable(golden, P, 'roi', [50]);
     expect(roi[0]!.minSell).toBe(20.12);

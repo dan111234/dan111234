@@ -120,15 +120,15 @@ export function tierFullName(tier: SizeTier, media = false): string {
   return isStandardTier(tier) ? `${tier} ${media ? 'Media' : 'Non-Media'}` : tier;
 }
 
-/** Short label for the widget (docs/04 §2-1-5). */
+/** Short label for the widget (docs/04 §2-1-5; RevSeller shows "Lg Standard", screenshot 01). */
 export function tierShortName(tier: SizeTier | null): string {
   switch (tier) {
     case null:
       return 'Unknown';
     case 'Small Standard-Size':
-      return 'Sm Std';
+      return 'Sm Standard';
     case 'Large Standard-Size':
-      return 'Lg Std';
+      return 'Lg Standard';
     case 'Small Bulky':
       return 'Sm Bulky';
     case 'Large Bulky':

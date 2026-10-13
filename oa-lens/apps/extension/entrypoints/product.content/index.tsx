@@ -7,6 +7,7 @@ import {
   insertAtAnchor,
   isAtAnchor,
   readAsin,
+  readBoughtPastMonth,
   readTitle,
 } from '../../lib/amazonDom';
 import '../../styles/tailwind.css';
@@ -29,7 +30,14 @@ export default defineContentScript({
     let anchor = findWidgetAnchor(document);
 
     const draw = (container: HTMLElement) =>
-      render(<ProductWidget asin={asin} domTitle={readTitle(document)} />, container);
+      render(
+        <ProductWidget
+          asin={asin}
+          domTitle={readTitle(document)}
+          bought={readBoughtPastMonth(document)}
+        />,
+        container,
+      );
 
     const ui = await createShadowRootUi(ctx, {
       name: 'oa-lens-widget',

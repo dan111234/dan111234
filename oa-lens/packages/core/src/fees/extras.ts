@@ -1,6 +1,7 @@
 // Price-independent FBA fees: storage, inbound placement, low inventory, ship to FBA, prep chips.
 import {
   fbaExtrasFeeTable,
+  ltsfTable,
   inboundPlacementTable,
   lowInventoryTable,
   storageFeeHazmatTable,
@@ -133,4 +134,24 @@ export const DEFAULT_PREP_CHIPS: PrepChip[] = [
 export function prepChipsFee(chips: PrepChip[], enabledIds: Iterable<string>): number {
   const on = new Set(enabledIds);
   return round2(chips.filter((c) => on.has(c.id)).reduce((sum, c) => sum + c.amount, 0));
+}
+
+export interface LtsfRow {
+  days: string;
+  /** $ per cubic foot per month. */
+  perCubicFoot: number;
+  /** Minimum $ per unit, for the oldest brackets. */
+  minPerUnit: number | null;
+  /** Monthly surcharge for this item: max(cu ft × rate, minimum). */
+  monthly: number;
+}
+
+/** Aged inventory surcharge (formerly LTSF) per age bracket (docs/02 §K-13). */
+export function ltsfRows(cuft: number): LtsfRow[] {
+  return Object.entries(ltsfTable).map(([days, { foot, unit }]) => ({
+    days,
+    perCubicFoot: foot,
+    minPerUnit: unit ?? null,
+    monthly: round2(Math.max(cuft * foot, unit ?? 0)),
+  }));
 }

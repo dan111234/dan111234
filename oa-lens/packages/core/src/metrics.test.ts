@@ -17,8 +17,9 @@ describe('Top %', () => {
 });
 
 describe('closeFbaOfferCount', () => {
-  it('counts FBA offers within x% of the lowest', () => {
-    expect(closeFbaOfferCount([10, 10.2, 10.3, 10.31, 12], 3)).toBe(3);
+  it('counts other FBA offers within x% of the lowest', () => {
+    expect(closeFbaOfferCount([10, 10.2, 10.3, 10.31, 12], 3)).toBe(2);
+    expect(closeFbaOfferCount([93.47, 112.79], 3)).toBe(0);
     expect(closeFbaOfferCount([], 3)).toBe(0);
   });
 });

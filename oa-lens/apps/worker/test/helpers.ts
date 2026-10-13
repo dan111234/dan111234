@@ -80,3 +80,33 @@ export const KEEPA = 'https://api.keepa.com';
 
 export const lwaOk: Handler = () =>
   json({ access_token: 'Atza|access', token_type: 'bearer', expires_in: 3600 });
+
+/** A D1Database backed by node:sqlite with the real migrations applied. */
+export async function sqliteD1(): Promise<D1Database> {
+  const { DatabaseSync } = await import('node:sqlite');
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const db = new DatabaseSync(':memory:');
+  const dir = new URL('../migrations/', import.meta.url);
+  for (const file of readdirSync(dir).sort()) db.exec(readFileSync(new URL(file, dir), 'utf8'));
+  const prepare = (sql: string) => {
+    let params: unknown[] = [];
+    const stmt = {
+      bind(...values: unknown[]) {
+        params = values;
+        return stmt;
+      },
+      async first<T>() {
+        return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+      },
+      async all<T>() {
+        return { results: db.prepare(sql).all(...(params as never[])) as T[], success: true };
+      },
+      async run() {
+        db.prepare(sql).run(...(params as never[]));
+        return { success: true };
+      },
+    };
+    return stmt;
+  };
+  return { prepare } as unknown as D1Database;
+}

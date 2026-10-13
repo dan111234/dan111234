@@ -7,6 +7,7 @@ RevSeller와 같은 사용감의 개인용 아마존 소싱 확장 프로그램�
 | 항목 | 어디서 | 비고 |
 |---|---|---|
 | SP-API 앱 (LWA Client ID / Client Secret) | Solution Provider Portal → 개발자 센트럴 → 앱 "REvseller 대체" → **LWA 자격 증명 "보기"** | 앱이 "초안" 상태여도 자체 승인으로 쓸 수 있음 |
+| SP-API 역할 | 같은 화면 → 앱 편집 → 역할 | **Product Listing**, **Pricing**, **Amazon Fulfillment**(Prep 요구사항과 위험물 Haz 배지에 필요). 역할을 바꾸면 다시 승인해 새 Refresh Token을 받아야 함 |
 | Refresh Token | 같은 화면 → **앱 편집 옆 ▾ → 앱 승인(Authorize app)** | 역할을 추가·변경하면 다시 승인해서 새 토큰을 받아야 함 |
 | Seller ID (Merchant Token) | Seller Central → 설정 → 계정 정보 → 판매자 토큰 | Listings Restrictions 호출에 필요 |
 | Keepa API Key | keepa.com → API Access | 유료 구독. 최소 플랜(분당 20토큰)으로 시작 |

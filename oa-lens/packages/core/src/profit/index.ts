@@ -1,7 +1,7 @@
 // Net profit, ROI, margin and the reverse solvers (docs/04 §3, §5).
 import type { ReferralRule } from '../../data';
 import { invertReferral, referralFee } from '../fees/referral';
-import { round2 } from '../round';
+import { ceil2, floor2, round2 } from '../round';
 
 export type RoiMethod = 'buyCostOnly' | 'buyCost_Other_Inbound' | 'allFees';
 
@@ -124,7 +124,8 @@ export function maxBuyCost(m: CostModel, price: number, target: Target): number 
   }
   if (!Number.isFinite(cost) || cost < 0) return null;
   const d = m.discount ?? 0;
-  return round2(d < 1 ? cost / (1 - d) : cost);
+  // Rounded down so the target still holds at the shown cost.
+  return floor2(d < 1 ? cost / (1 - d) : cost);
 }
 
 /** Buy cost at which net profit is 0. */
@@ -137,34 +138,33 @@ function solveForNetPart(
   extra: (price: number) => number,
   startPrice: number,
 ): number {
-  // S = extra + (C' + Other + Tax) + (Fees − Referral); P = invertReferral(S). Re-solve when the
-  // answer lands in a different fulfillment price band (docs/04 §5 band correction).
+  // S = extra + (C' + Other + Tax) + (Fees − Referral); P = invertReferral(S). When the answer
+  // lands in another fulfillment price band, solve once more with that band's fee (docs/04 §5).
+  // Only once: RevSeller shows $9.96 for B0FBP3N9RK although that answer is below $10 again.
   const cost = effectiveCost(m);
   const tax = taxOn(m, cost);
-  let guess = startPrice;
-  let price = guess;
-  for (let i = 0; i < 4; i++) {
-    const s =
-      extra(guess) + cost + m.other + tax + m.closingFee + m.fulfillment(guess) + m.fixedFees;
-    price = invertReferral(m.referralRule, s);
-    if (m.fulfillment(price) === m.fulfillment(guess)) break;
-    guess = price;
-  }
-  return price;
+  const solve = (band: number) =>
+    invertReferral(
+      m.referralRule,
+      extra(band) + cost + m.other + tax + m.closingFee + m.fulfillment(band) + m.fixedFees,
+    );
+  const first = solve(startPrice);
+  return m.fulfillment(first) === m.fulfillment(startPrice) ? first : solve(first);
 }
 
 /**
- * Lowest sell price that meets the target with the current buy cost (docs/04 §5 Min Sell).
+ * Lowest sell price that meets the target with the current buy cost (docs/04 §5 Min Sell),
+ * rounded up to the cent like RevSeller (B0FBP3N9RK breakeven 8.46 / 0.85 = 9.9529 -> $9.96).
  * `currentPrice` picks the starting fulfillment band. null for ROI with the allFees method.
  */
 export function minSellPrice(m: CostModel, target: Target, currentPrice: number): number | null {
   const start = currentPrice > 0 ? currentPrice : 10;
-  if (target.metric === 'net') return round2(solveForNetPart(m, () => target.value, start));
+  if (target.metric === 'net') return ceil2(solveForNetPart(m, () => target.value, start));
   if (target.metric === 'roi') {
     if ((m.roiMethod ?? 'buyCostOnly') === 'allFees') return null;
     const cost = effectiveCost(m);
     const denominator = roiDenominator(m, cost, taxOn(m, cost), 0);
-    return round2(solveForNetPart(m, () => denominator * target.value, start));
+    return ceil2(solveForNetPart(m, () => denominator * target.value, start));
   }
   // Margin: P(k+1) = MinSell(net = P(k) × M), starting at the breakeven price.
   if (target.value >= 1) return null;
@@ -175,7 +175,7 @@ export function minSellPrice(m: CostModel, target: Target, currentPrice: number)
     price = next;
     if (done) break;
   }
-  return round2(price);
+  return ceil2(price);
 }
 
 export function breakevenPrice(m: CostModel, currentPrice: number): number | null {
@@ -235,9 +235,11 @@ export function targetsTable(
 ): TargetRow[] {
   return targets.map((target) => {
     const value = metric === 'net' ? target : target / 100;
+    // RevSeller leaves ROI/Margin "Sell" empty until a buy cost is entered.
+    const noCost = metric !== 'net' && effectiveCost(m) <= 0;
     return {
       target,
-      minSell: minSellPrice(m, { metric, value }, price),
+      minSell: noCost ? null : minSellPrice(m, { metric, value }, price),
       maxBuy: maxBuyCost(m, price, { metric, value }),
     };
   });
