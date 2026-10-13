@@ -1,0 +1,10 @@
+node_modules/
+.output/
+.wxt/
+dist/
+.wrangler/
+apps/worker/.dev.vars
+*.local
+.env*
+docs/reference/screenshots/*
+!docs/reference/screenshots/README.md
