@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # Comma-separated extension origins allowed by CORS. Empty = any chrome-extension:// origin
 # (the shared key still applies). Set by `pnpm ext:key` from apps/extension/extension-key.pub.
 [vars]
-ALLOWED_ORIGINS = "chrome-extension://alialhhcfbmjkjlbhdmmegejmjhpeiap"
+ALLOWED_ORIGINS = "chrome-extension://alialhhcfbmjkjlbhdmmegejmjhpeiap,chrome-extension://ihihgmadibanljlpbemcbhkjigcijacc"
 
 [[d1_databases]]
 binding = "DB"
