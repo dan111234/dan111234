@@ -95,8 +95,8 @@ SP-API 한도는 작업마다 다르다. 응답 헤더 `x-amzn-RateLimit-Limit`�
 |---|---|---|
 | Melt(녹는 상품) 배지 | RevSeller 서버가 보유한 아마존 meltable 목록 | 카테고리·키워드 규칙(초콜릿, 캔디, 왁스, 립밤 등) + 사용자가 수동으로 표시. 4/15~10/15에는 경고를 강조 |
 | IP 배지 | 제휴사(OAChallenge) IP 신고 데이터 | 사용자 본인의 "IP 주의 브랜드" 목록(D1)에 있으면 표시 |
-| Haz 배지 | 서버 판단 + Seller Central 페이지 | FBA Inbound Eligibility API 결과와 수수료 비교(위험물 요금표와 일치하면 Haz) |
-| Prep 요구사항 | Seller Central 페이지 파싱(로그인 세션) | SP-API `getPrepInstructions`(v0, ASIN 목록). 안 되면 같은 방식으로 Seller Central 페이지 파싱으로 대체 |
+| Haz 배지 | 서버 판단 + Seller Central 페이지(RevSeller manifest에 `https://sellercentral.amazon.com/*` 권한과 Add a Product·Revenue Calculator 페이지 content script가 있다, 2026-10-14 확인) | Keepa `hazardousMaterials`(아마존 위험물 분류) → 수수료 비교. `getItemEligibilityPreview`는 이 앱에서 403 |
+| Prep 요구사항 | Seller Central 페이지 파싱(로그인 세션) | `getPrepInstructions`(v0)는 403. Seller Central 로그인 세션으로 읽는 방식으로 바꿔야 하며, 어느 화면·요청을 쓸지는 사용자 브라우저에서 확인한 뒤 정한다 |
 | Keepa 데이터 | RevSeller가 대신 구독한 Keepa | 사용자 본인 Keepa API 구독 |
 | Seller Central 계산기 무게·치수 확인 | Seller Central 내부 API | 기본은 Catalog Items의 패키지 치수. 옵션으로 Seller Central 계산기 페이지 열기 링크만 제공 |
 | 모바일 앱, Firefox | | 범위 밖 |

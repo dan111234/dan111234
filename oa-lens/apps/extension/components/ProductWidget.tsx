@@ -9,7 +9,13 @@ import {
 } from '@oa-lens/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { BoughtPastMonth } from '../lib/amazonDom';
-import { hazmatBadge, HAZMAT_BLOCKED, HAZMAT_FULFILLABLE } from '../lib/hazmatCodes';
+import {
+  hazmatBadge,
+  hazmatDetail,
+  HAZMAT_BLOCKED,
+  HAZMAT_FULFILLABLE,
+  keepaHazmatBadge,
+} from '../lib/hazmatCodes';
 import { send } from '../lib/messages';
 import {
   buildProductInput,
@@ -252,10 +258,15 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
     return () => window.clearTimeout(t);
   }, [values.buyFba, values.buyFbm, touched.buy]);
 
+  const keepaProduct =
+    (keepaOffers.status === 'ready' ? keepaOffers.product : null) ??
+    (keepa.status === 'ready' ? keepa.product : null);
+  const keepaHazmat = keepaProduct?.hazmat ?? null;
   const reasons = eligibility?.reasons ?? [];
-  const eligibilityHazmat = reasons.some((r) =>
-    ([...HAZMAT_BLOCKED, ...HAZMAT_FULFILLABLE] as string[]).includes(r),
-  );
+  // Red Haz (eligibility or Keepa) bills hazmat storage and ship-to-FBA rates; yellow does not.
+  const eligibilityHazmat =
+    reasons.some((r) => ([...HAZMAT_BLOCKED, ...HAZMAT_FULFILLABLE] as string[]).includes(r)) ||
+    keepaHazmatBadge(keepaHazmat) === 'red';
 
   const result = useMemo(
     () =>
@@ -324,9 +335,6 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
   const rank = catalog?.salesRank ?? (parentRank !== 'loading' ? parentRank : null);
   const title = catalog?.title ?? domTitle ?? '';
   const upc = catalog?.identifiers.upc[0] ?? catalog?.identifiers.ean[0] ?? null;
-  const keepaProduct =
-    (keepaOffers.status === 'ready' ? keepaOffers.product : null) ??
-    (keepa.status === 'ready' ? keepa.product : null);
   const listed = daysSince(keepaProduct?.listedSince ?? catalog?.launchDate ?? null);
   const keepaProps = {
     keepa,
@@ -365,7 +373,12 @@ export function ProductWidget({ asin, domTitle, bought }: Props) {
         restrictions={restrictions}
         restrictionsError={restrictionsError}
         used={condition === 'used'}
-        hazmat={hazmatBadge(eligibility, result.kind === 'hazmat' && !eligibilityHazmat)}
+        hazmat={hazmatBadge(
+          eligibility,
+          keepaHazmat,
+          result.kind === 'hazmat' && !eligibilityHazmat,
+        )}
+        hazmatDetail={hazmatDetail(keepaHazmat)}
         transparency={transparency}
         onSettings={() => setSettingsTab('fba')}
         onOptions={() => void send({ type: 'openOptions' })}

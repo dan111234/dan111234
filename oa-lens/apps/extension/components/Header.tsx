@@ -186,7 +186,13 @@ function RestrictionBadge(props: {
   );
 }
 
-function HazBadge({ hazmat }: { hazmat: Exclude<HazmatBadge, null> }) {
+function HazBadge({
+  hazmat,
+  detail,
+}: {
+  hazmat: Exclude<HazmatBadge, null>;
+  detail: string | null;
+}) {
   const rows: [Exclude<HazmatBadge, null>, ComponentChildren][] = [
     ['red', 'Hazmat'],
     [
@@ -224,6 +230,11 @@ function HazBadge({ hazmat }: { hazmat: Exclude<HazmatBadge, null> }) {
             </span>
           </div>
         ))}
+        {detail && (
+          <div class="oal-mt-[6px] oal-border-t oal-border-[#eee] oal-pt-[6px] oal-text-[12px] oal-text-[#565959]">
+            {detail}
+          </div>
+        )}
       </div>
     </Popover>
   );
@@ -288,6 +299,7 @@ export interface HeaderProps {
   restrictionsError: boolean;
   used: boolean;
   hazmat: HazmatBadge;
+  hazmatDetail: string | null;
   transparency: boolean;
   onSettings: () => void;
   onOptions: () => void;
@@ -349,7 +361,7 @@ export function Header(props: HeaderProps) {
         </Popover>
       </div>
       <div class="oal-flex oal-items-center oal-gap-[5px]">
-        {props.hazmat && <HazBadge hazmat={props.hazmat} />}
+        {props.hazmat && <HazBadge hazmat={props.hazmat} detail={props.hazmatDetail} />}
         {props.transparency && (
           <Badge kind="red" title="This ASIN requires transparency codes.">
             Tp

@@ -1,7 +1,7 @@
 import type { ApiResult, KeepaProductsDTO } from '@oa-lens/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app';
-import { normalizeKeepaProduct, type RawKeepaProduct } from '../src/keepa/product';
+import { normalizeHazmat, normalizeKeepaProduct, type RawKeepaProduct } from '../src/keepa/product';
 import fixture from './fixtures/keepa-product.json';
 import { AUTH, json, KEEPA, makeEnv, mockFetch } from './helpers';
 
@@ -40,6 +40,32 @@ describe('normalizeKeepaProduct (B0FBP3N9RK with offers=20)', () => {
       listedSince: null,
       salesCsv: null,
     });
+  });
+});
+
+describe('normalizeHazmat', () => {
+  // B0HC235K4R (Nuwave heated mug), Keepa 2026-10-14; RevSeller shows a yellow Haz badge.
+  const mug = [
+    { aspect: 'proper_shipping_name', value: 'LITHIUM ION BATTERIES CONTAINED IN EQUIPMENT' },
+    { aspect: 'united_nations_regulatory_id', value: 'UN3481' },
+    { aspect: 'regulatory_packing_group', value: 'II' },
+    { aspect: 'exception', value: 'AE_SmallLithiumIonBatteryInEquipment' },
+    { aspect: 'exception', value: 'US_SmallLithiumIonBatteryInEquipment' },
+    { aspect: 'transportation_regulatory_class', value: '9' },
+  ];
+  it('reads UN id, class, name and US exceptions', () => {
+    expect(normalizeHazmat(mug)).toEqual({
+      unId: 'UN3481',
+      className: '9',
+      shippingName: 'LITHIUM ION BATTERIES CONTAINED IN EQUIPMENT',
+      packingGroup: 'II',
+      usExceptions: ['US_SmallLithiumIonBatteryInEquipment'],
+    });
+  });
+  it('empty or exception-only lists are not hazmat', () => {
+    expect(normalizeHazmat([])).toBeNull();
+    expect(normalizeHazmat(undefined)).toBeNull();
+    expect(normalizeHazmat([{ aspect: 'exception', value: 'US_X' }])).toBeNull();
   });
 });
 

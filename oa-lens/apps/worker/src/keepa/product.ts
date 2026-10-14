@@ -1,4 +1,9 @@
-import { MARKETPLACES, type KeepaProductDTO, type MarketplaceKey } from '@oa-lens/shared';
+import {
+  MARKETPLACES,
+  type KeepaHazmatDTO,
+  type KeepaProductDTO,
+  type MarketplaceKey,
+} from '@oa-lens/shared';
 import type { Env } from '../env';
 import { ApiError } from '../lib/errors';
 import { upstreamFetch } from '../lib/http';
@@ -9,6 +14,9 @@ const KEEPA_EPOCH_MINUTES = 21564000;
 
 export interface RawKeepaProduct {
   asin?: string;
+  hazardousMaterials?: { aspect?: string; value?: string }[] | null;
+  batteriesRequired?: boolean;
+  batteriesIncluded?: boolean;
   csv?: (number[] | null)[] | null;
   monthlySold?: number;
   listedSince?: number;
@@ -33,6 +41,24 @@ interface RawKeepaResponse {
   error?: { type?: string; message?: string };
 }
 
+/** Amazon dangerous goods fields (proper shipping name, UN id, class, exceptions). */
+export function normalizeHazmat(
+  list: RawKeepaProduct['hazardousMaterials'],
+): KeepaHazmatDTO | null {
+  if (!list?.length) return null;
+  const first = (aspect: string) => list.find((h) => h.aspect === aspect)?.value ?? null;
+  const dto: KeepaHazmatDTO = {
+    unId: first('united_nations_regulatory_id'),
+    className: first('transportation_regulatory_class'),
+    shippingName: first('proper_shipping_name'),
+    packingGroup: first('regulatory_packing_group'),
+    usExceptions: list
+      .filter((h) => h.aspect === 'exception' && h.value?.startsWith('US_'))
+      .map((h) => h.value!),
+  };
+  return dto.unId || dto.className || dto.shippingName ? dto : null;
+}
+
 const drops = (v: number | undefined) => (typeof v === 'number' && v >= 0 ? v : null);
 
 export function normalizeKeepaProduct(p: RawKeepaProduct, withOffers: boolean): KeepaProductDTO {
@@ -55,6 +81,9 @@ export function normalizeKeepaProduct(p: RawKeepaProduct, withOffers: boolean): 
         : null,
     salesCsv: p.csv?.[3] ?? null,
     withOffers,
+    hazmat: normalizeHazmat(p.hazardousMaterials),
+    batteriesRequired: typeof p.batteriesRequired === 'boolean' ? p.batteriesRequired : null,
+    batteriesIncluded: typeof p.batteriesIncluded === 'boolean' ? p.batteriesIncluded : null,
   };
 }
 

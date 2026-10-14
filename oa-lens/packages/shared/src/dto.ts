@@ -179,6 +179,22 @@ export interface KeepaProductDTO {
   salesCsv: number[] | null;
   /** Requested with offers=20, so FBA/FBM/Buy Box averages are filled. */
   withOffers: boolean;
+  /** Amazon's dangerous goods data as Keepa reports it; null = none listed. */
+  hazmat: KeepaHazmatDTO | null;
+  batteriesRequired: boolean | null;
+  batteriesIncluded: boolean | null;
+}
+
+export interface KeepaHazmatDTO {
+  /** e.g. "UN3481" */
+  unId: string | null;
+  /** Transport class, e.g. "9" */
+  className: string | null;
+  /** e.g. "LITHIUM ION BATTERIES CONTAINED IN EQUIPMENT" */
+  shippingName: string | null;
+  packingGroup: string | null;
+  /** Exceptions that apply in the US, e.g. "US_SmallLithiumIonBatteryInEquipment". */
+  usExceptions: string[];
 }
 
 export interface KeepaQuotaDTO {

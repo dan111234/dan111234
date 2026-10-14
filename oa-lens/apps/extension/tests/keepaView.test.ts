@@ -25,6 +25,9 @@ const keepa: KeepaProductDTO = {
   listedSince: null,
   salesCsv: null,
   withOffers: true,
+  hazmat: null,
+  batteriesRequired: null,
+  batteriesIncluded: null,
 };
 const ALL = parseRowList(
   'sales,salesDrop,avgRank,outOfStockRateAmz,outOfStockRate3p,avgPriceFBA,avgPriceBB,avgPriceNew,avgPrice3p,avgPriceUsed',
@@ -81,5 +84,26 @@ describe('sales', () => {
     expect(salesValue(null, { ...keepa, monthlySold: 2000 })).toBe('2K+');
     expect(salesValue(null, null)).toBe('--');
     expect(formatMonthlySold(100)).toBe('100+');
+  });
+});
+
+describe('hazmat badge', () => {
+  it('eligibility codes, then Keepa dangerous goods data, then the fee comparison', async () => {
+    const { hazmatBadge, hazmatDetail } = await import('../lib/hazmatCodes');
+    const mug = {
+      unId: 'UN3481',
+      className: '9',
+      shippingName: 'LITHIUM ION BATTERIES CONTAINED IN EQUIPMENT',
+      packingGroup: 'II',
+      usExceptions: ['US_SmallLithiumIonBatteryInEquipment'],
+    };
+    expect(hazmatBadge(null, mug, false)).toBe('yellow');
+    expect(hazmatBadge(null, { ...mug, usExceptions: [] }, false)).toBe('red');
+    expect(hazmatBadge(null, null, false)).toBeNull();
+    expect(hazmatBadge(null, null, true)).toBe('red');
+    expect(hazmatBadge({ eligible: false, reasons: ['FBA_INB_0007'] }, mug, false)).toBe('review');
+    expect(hazmatDetail(mug)).toBe(
+      'UN3481 · Class 9 · LITHIUM ION BATTERIES CONTAINED IN EQUIPMENT · US exception: Small Lithium Ion Battery In Equipment',
+    );
   });
 });

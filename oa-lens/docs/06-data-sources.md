@@ -18,7 +18,8 @@
 | Sell/Appr/Rstr | RST | `restrictions` 비어 있음 → Sell. `reasons[].reasonCode`가 APPROVAL_REQUIRED → Appr, NOT_ELIGIBLE → Rstr, ASIN_NOT_FOUND → `--`. 승인 링크는 `reasons[].links[]` |
 | Used 조건별 제한 | RST | conditionType `used_like_new`, `used_very_good`, `used_good`, `used_acceptable`를 각각 호출 |
 | Tp | RST | reasons의 message에 "Transparency"가 들어 있으면 표시. 없으면 숨김 |
-| Haz | ELG + FEE + CALC | ELG `isEligibleForProgram=false`이고 사유 코드가 위험물 관련이면 빨강. 수수료 비교에서 위험물로 판정되면(04 §2-4) 빨강. 검토 중 코드면 Rvw. 코드표는 SP-API 문서에서 확인해 `lib/hazmatCodes.ts`에 모은다 |
+| Haz | ELG → KP → FEE + CALC | KP `hazardousMaterials`(아마존 위험물 데이터): UN 번호·등급이 있으면 Haz. 미국 예외(`US_…`, 예: SmallLithiumIonBatteryInEquipment)가 있으면 노랑, 없으면 빨강(B0HC235K4R = UN3481 + 미국 예외 = RevSeller 노랑 Haz). ELG는 이 앱에서 403이라 현재는 KP가 주 출처 |
+| Haz (구) | ELG + FEE + CALC | ELG `isEligibleForProgram=false`이고 사유 코드가 위험물 관련이면 빨강. 수수료 비교에서 위험물로 판정되면(04 §2-4) 빨강. 검토 중 코드면 Rvw. 코드표는 SP-API 문서에서 확인해 `lib/hazmatCodes.ts`에 모은다 |
 | Melt | CALC + D1 | 카테고리·제목 키워드 규칙과 사용자 키워드 목록 |
 | IP | D1 | IP 주의 브랜드 목록에 브랜드가 있으면 |
 | Switch SC | — | 이 구현에서는 쓰지 않는다(SP-API는 마켓을 직접 지정). UI 자리만 남긴다 |
