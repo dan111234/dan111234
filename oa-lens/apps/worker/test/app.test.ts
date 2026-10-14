@@ -340,3 +340,12 @@ describe('unknown routes', () => {
     expect(body).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
   });
 });
+
+describe('GET /privacy', () => {
+  it('is public HTML', async () => {
+    const res = await app.request('/privacy', {}, makeEnv());
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(await res.text()).toContain('OA Lens privacy policy');
+  });
+});

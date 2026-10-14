@@ -58,7 +58,7 @@ export function OptionsApp() {
     <main class="oal-mx-auto oal-max-w-xl oal-p-6 oal-font-sans oal-text-[14px] oal-text-gray-900">
       <h1 class="oal-mb-1 oal-text-xl oal-font-bold">OA Lens 설정</h1>
       <p class="oal-mb-5 oal-text-gray-600">
-        Cloudflare Worker 주소와 공유키를 입력하세요. 값은 이 기기의 Chrome에만 저장됩니다.
+        Cloudflare Worker 주소와 공유키를 입력하세요. 값은 Chrome 동기화로 저장되어, 같은 Google 계정으로 로그인한 다른 컴퓨터에서도 그대로 쓰입니다.
       </p>
 
       <form

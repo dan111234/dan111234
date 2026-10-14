@@ -6,6 +6,7 @@ import { ApiError, toApiError } from './lib/errors';
 import { failBody } from './lib/respond';
 import { healthRoutes } from './routes/health';
 import { keepaRoutes, quotaRoutes } from './routes/keepa';
+import { privacyRoutes } from './routes/privacy';
 import { productRoutes } from './routes/product';
 import { spapiRoutes } from './routes/spapi';
 import { userdataRoutes } from './routes/userdata';
@@ -26,6 +27,7 @@ export function createApp() {
   );
   app.use('/v1/*', bearerAuth);
 
+  app.route('/privacy', privacyRoutes);
   app.route('/v1', healthRoutes);
   app.route('/v1/userdata', userdataRoutes);
   app.route('/v1/quota', quotaRoutes);

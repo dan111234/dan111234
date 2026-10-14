@@ -19,6 +19,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "ext:key": "node tools/ext-key.mjs",
+    "ext:store": "pnpm --filter @oa-lens/extension zip --mode store",
+    "ext:allow": "node tools/ext-allow.mjs",
     "verify:fees": "tsx tools/verify-fees.ts"
   },
   "devDependencies": {

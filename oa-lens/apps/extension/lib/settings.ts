@@ -1,9 +1,11 @@
 import { DEFAULT_SETTINGS, mergeSettings, type Settings } from '@oa-lens/shared';
 import { storage } from 'wxt/utils/storage';
 
-// Connection settings for the Worker (docs/03 §I). Kept in chrome.storage.local on this device.
-export const workerUrlItem = storage.defineItem<string>('local:workerUrl', { fallback: '' });
-export const sharedKeyItem = storage.defineItem<string>('local:sharedKey', { fallback: '' });
+// Connection and calculator settings live in chrome.storage.sync, so signing in to Chrome on
+// another computer brings them along (Chrome Web Store install). Earlier builds used .local;
+// migrateLocalToSync() copies those values over once.
+export const workerUrlItem = storage.defineItem<string>('sync:workerUrl', { fallback: '' });
+export const sharedKeyItem = storage.defineItem<string>('sync:sharedKey', { fallback: '' });
 
 export interface WorkerConfig {
   url: string;
@@ -33,7 +35,21 @@ export async function loadWorkerConfig(): Promise<WorkerConfig | null> {
 }
 
 /** Calculator settings (docs/05), merged over the defaults on every read. */
-export const settingsItem = storage.defineItem<unknown>('local:settings', { fallback: {} });
+export const settingsItem = storage.defineItem<unknown>('sync:settings', { fallback: {} });
+
+const LEGACY_KEYS = ['workerUrl', 'sharedKey', 'settings'] as const;
+
+/** Copies values saved by older builds (chrome.storage.local) into sync, unless sync has them. */
+export async function migrateLocalToSync(): Promise<void> {
+  for (const key of LEGACY_KEYS) {
+    const [local, synced] = await Promise.all([
+      storage.getItem<unknown>(`local:${key}`),
+      storage.getItem<unknown>(`sync:${key}`),
+    ]);
+    if (local != null && synced == null) await storage.setItem(`sync:${key}`, local);
+    if (local != null) await storage.removeItem(`local:${key}`);
+  }
+}
 
 export async function loadSettings(): Promise<Settings> {
   return mergeSettings(await settingsItem.getValue());

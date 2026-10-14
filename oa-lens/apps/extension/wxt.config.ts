@@ -11,17 +11,24 @@ const extensionKey =
 
 export default defineConfig({
   imports: false,
-  manifest: {
-    name: 'OA Lens',
-    description: 'Amazon product panel powered by your own SP-API app and Keepa key.',
-    permissions: ['storage'],
-    // Default Worker hosts. Other hosts still work through the Worker's CORS headers.
-    host_permissions: ['https://*.workers.dev/*', 'http://localhost/*', 'http://127.0.0.1/*'],
-    ...(extensionKey ? { key: extensionKey } : {}),
+  // `--mode store` (pnpm ext:store) builds the Chrome Web Store package: the store assigns its own
+  // key and ID, rejects a manifest `key`, and needs no localhost access.
+  manifest: ({ mode }) => {
+    const store = mode === 'store';
+    return {
+      name: 'OA Lens',
+      description: 'Amazon product panel powered by your own SP-API app and Keepa key.',
+      permissions: ['storage'],
+      // Default Worker hosts. Other hosts still work through the Worker's CORS headers.
+      host_permissions: store
+        ? ['https://*.workers.dev/*']
+        : ['https://*.workers.dev/*', 'http://localhost/*', 'http://127.0.0.1/*'],
+      ...(extensionKey && !store ? { key: extensionKey } : {}),
+    };
   },
   // `pnpm dev:ext` only builds and watches; load .output/chrome-mv3-dev into your own Chrome.
   webExt: { disabled: true },
-  zip: { artifactTemplate: 'oa-lens-{{version}}-{{browser}}.zip' },
+  zip: { artifactTemplate: 'oa-lens-{{version}}-{{browser}}-{{mode}}.zip' },
   vite: () => ({
     plugins: [preact()],
   }),

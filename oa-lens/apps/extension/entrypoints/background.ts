@@ -12,7 +12,7 @@ import type { Request, ResponseFor } from '../lib/messages';
 import { RequestQueue } from '../lib/queue';
 import { ResponseCache, type CacheEntry } from '../lib/responseCache';
 import { KEEPA_MIN_TOKENS } from '../lib/keepaView';
-import { loadWorkerConfig } from '../lib/settings';
+import { loadWorkerConfig, migrateLocalToSync } from '../lib/settings';
 import { clientError, workerFetch } from '../lib/workerClient';
 
 const CATALOG_TTL_MS = 10 * 60 * 1000;
@@ -139,6 +139,7 @@ async function handle(request: Request): Promise<ResponseFor<Request>> {
 }
 
 export default defineBackground(() => {
+  void migrateLocalToSync();
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     handle(message as Request)
       .then(sendResponse)

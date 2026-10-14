@@ -61,6 +61,14 @@ Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 이 확장만 CORS로 �
 4. 확장 옵션 페이지에서 Worker URL과 `EXT_SHARED_KEY`를 입력하고 **연결 테스트**를 누릅니다. "SP-API OK, 셀러 ID 확인"이 나오면 연결 완료입니다.
 5. 아마존 상품 페이지를 열면 상품명 아래에 위젯이 뜹니다.
 
+## Chrome 웹스토어 비공개 배포 (어느 컴퓨터에서나 자동 설치)
+1. `pnpm ext:store` → `apps/extension/.output/oa-lens-<버전>-chrome-store.zip` (manifest `key` 없음, 아이콘 포함)
+2. 개발자 대시보드 → 새 항목 → zip 업로드 → 스토어 등록정보·개인정보 보호 탭 작성 → **배포 → 공개 범위: 비공개(Private)**, 계정 설정의 **신뢰할 수 있는 테스터**에 본인 Gmail 추가 → 검토 제출
+3. 승인되면 대시보드에 보이는 **스토어 확장 ID**로 `pnpm ext:allow <ID>` → `pnpm deploy:worker`
+4. 개인정보처리방침 URL: `https://<Worker 주소>/privacy`
+5. 업데이트할 때는 `apps/extension/package.json`의 `version`을 올리고 1~2를 반복(새 패키지 업로드 → 검토)
+- Worker URL·공유키·계산 설정은 `chrome.storage.sync`에 저장되어, 같은 Google 계정으로 Chrome 동기화에 로그인하면 다른 컴퓨터에도 따라온다.
+
 ## 명령어
 | 명령 | 내용 |
 |---|---|
@@ -68,6 +76,8 @@ Worker는 `wrangler.toml`의 `ALLOWED_ORIGINS`에 적힌 이 확장만 CORS로 �
 | `pnpm typecheck` / `pnpm lint` / `pnpm format` | 타입 검사 / ESLint / Prettier |
 | `pnpm build` | 확장 zip + Worker 배포 번들(`apps/worker/dist`) |
 | `pnpm deploy:worker` | `wrangler deploy` |
+| `pnpm ext:store` | Chrome 웹스토어 업로드용 zip |
+| `pnpm ext:allow <ID>` | 웹스토어 확장 ID를 Worker CORS 허용 목록에 추가 |
 | `pnpm test:coverage` | core 테스트 커버리지 (90% 미만이면 실패) |
 | `pnpm verify:fees ASIN...` | 로컬 수수료 엔진과 SP-API 견적 대조. 환경 변수 `OA_LENS_WORKER_URL`, `EXT_SHARED_KEY` 필요. 차이가 $0.01을 넘는 행은 빨간색 |
 
