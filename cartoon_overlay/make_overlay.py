@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Cartoon / comic pop-up text overlay (transparent) for a 9:16 short-form video.
+"""Cartoon / comic pop-up text overlay (transparent) for a 16:9 video.
 
-Renders every frame at 2x (2160x3840) with Pillow, downsamples with LANCZOS
+Renders every frame at 2x (3840x2160) with Pillow, downsamples with LANCZOS
 (Pillow premultiplies alpha internally, so no halos), saves straight-alpha PNGs
 and encodes ProRes 4444 / VP9 alpha / a preview composite with ffmpeg.
 
     python3 make_overlay.py            # everything
     python3 make_overlay.py --frames 0,3,60   # quick test render of a few frames
+    python3 make_overlay.py --source other.mp4   # composite preview.mp4 over another video
 """
 import argparse
 import math
@@ -25,9 +26,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # =============================================================================
 CONFIG = {
     # --- video -------------------------------------------------------------
-    "W": 1080, "H": 1920, "FPS": 30, "FRAMES": 116,
+    "W": 1920, "H": 1080, "FPS": 30, "FRAMES": 116,
     "SS": 2,                                   # supersampling factor
-    "SOURCE_VIDEO": os.path.join(HERE, "1020_1.mp4"),
+    "SOURCE_VIDEO": os.path.join(HERE, "1020_11.mp4"),
     "OUT_DIR": HERE,
 
     # --- font --------------------------------------------------------------
@@ -35,31 +36,31 @@ CONFIG = {
     "FONTS": [os.path.join(HERE, "fonts", f) for f in
               ("LuckiestGuy-Regular.ttf", "Bangers-Regular.ttf", "LilitaOne-Regular.ttf")],
     "FONT_SIZE_MAX": 150,                      # px @1x, shrunk automatically to fit
-    "TEXT_MAX_W": 900,                         # px @1x, text block hard limit
+    "TEXT_MAX_W": 1400,                        # px @1x, text block hard limit
 
     # --- text look ---------------------------------------------------------
     "TEXT_FILL": (255, 255, 255),
     "OUTLINE": (0, 0, 0),
     "OUTLINE_W": 16,                           # px @1x
     "SHADOW_OFFSET": (10, 10),                 # px @1x, hard (no blur) shadow
-    "BURST_OUTLINE_W": 8,                      # px @1x
-    "BURST_PAD": (40, 58),                     # px @1x, text box -> burst body
-    "SPIKE_LEN": 52,                           # px @1x, average spike length
-    "SPIKE_SIDE_FACTOR": 0.55,                 # spikes at the left/right ends are this short
+    "ACCENT_STROKE_W": 6,                      # px @1x, coloured ring outside the black outline (0 = off)
 
-    # --- placement / safe zone (each segment has its own "center") ----------
-    "SAFE_TOP": 160, "SAFE_BOTTOM": 480, "SAFE_RIGHT": 140, "SAFE_LEFT": 0,
+    # --- placement / title safe 5% (each segment has its own "center") ------
+    "SAFE_X": 96, "SAFE_Y": 54,
     "SAFE_PAD": 6,                             # extra breathing room inside safe zone
 
     # --- segments ----------------------------------------------------------
     "SEGMENTS": [
+        # max_bottom: lowest y the text may reach in any frame (pop, bob, shadow included)
+        # fx_bottom:  lowest y the speed lines / sparks / puffs may reach
         {"text": "Indentations", "q": "?", "start": 0, "end": 59,
-         "burst_color": "#FFD60A", "tilt": -6.0, "exit": True, "seed": 11,
-         "spikes": 16, "max_bottom": 1000, "center": (540, 560)},
+         "accent": "#FFD60A", "tilt": -6.0, "exit": True, "seed": 11,
+         "center": (960, 190), "max_bottom": 330,    # keep the dents (centre-bottom) clear
+         "fx_bottom": 420},
         {"text": "Crumbs", "q": "?", "start": 60, "end": 115,
-         "burst_color": "#FF4D8D", "tilt": 6.0, "exit": False, "seed": 23,
-         "spikes": 15, "max_bottom": 690,    # keep clear of the scratch (~y 700+)
-         "center": (540, 515)},
+         "accent": "#FF4D8D", "tilt": 6.0, "exit": False, "seed": 23,
+         "center": (960, 190), "max_bottom": 290,    # scratch at y 300-420, crumbs below 640
+         "fx_bottom": 295},
     ],
 
     # --- animation (frames @30fps, relative to segment start) ---------------
@@ -67,7 +68,7 @@ CONFIG = {
     "POP_SCALE": [(0, 0.40), (3, 1.25), (5, 0.90), (7, 1.05), (9, 1.00)],
     "POP_STRETCH": [(0, 1.15), (3, 1.20), (5, 0.86), (7, 1.04), (9, 1.00)],
     "POP_ROT_FROM": -15.0,                     # deg, damped wobble into the tilt
-    "BURST_LEAD": 2,                           # burst pops this many frames ahead
+    "FX_AT": 3,                                # speed lines/sparks fire at the overshoot peak
     "Q_DELAY": 3,                              # "?" pops this many frames late
     "Q_POP_SCALE": [(0, 0.0), (2, 1.40), (4, 0.82), (6, 1.10), (8, 1.00)],
     "Q_POP_STRETCH": [(0, 1.2), (2, 1.15), (4, 0.85), (6, 1.05), (8, 1.00)],
@@ -75,7 +76,9 @@ CONFIG = {
     "BOB_PX": 6, "BOB_PERIOD": 32,
     "BOIL_EVERY": 2,                           # redraw the wobbly lines every N frames
     "BOIL_PX": 2.5,                            # @1x jitter amount for line boil
-    "SPEED_LINES": 10, "SPEED_LIFE": 7, "SPARKS": 6, "SPEED_LEN": 190,
+    "EFFECTS": True,                           # speed lines + sparks + exit puffs on/off
+    "FX_PAD": 30,                              # px @1x, text box -> effects ellipse
+    "SPEED_LINES": 10, "SPEED_LIFE": 7, "SPARKS": 6, "SPEED_LEN": 260,
     "EXIT_SCALE": [(-4, 1.0), (-3, 1.10), (-2, 0.70), (-1, 0.28), (0, 0.0)],  # rel. to seg end
     "EXIT_STRETCH": [(-4, 1.0), (-3, 1.10), (-2, 1.2), (-1, 1.3)],
     "PUFFS": 4,
@@ -111,10 +114,16 @@ def keyed(keys, t):
     return keys[-1][1]
 
 
-def safe_box():
+def safe_box(bottom=None):
     p = C["SAFE_PAD"]
-    return (C["SAFE_LEFT"] + p, C["SAFE_TOP"] + p,
-            C["W"] - C["SAFE_RIGHT"] - p, C["H"] - C["SAFE_BOTTOM"] - p)
+    y1 = C["H"] - C["SAFE_Y"] - p
+    return (C["SAFE_X"] + p, C["SAFE_Y"] + p, C["W"] - C["SAFE_X"] - p,
+            y1 if bottom is None else min(y1, bottom))
+
+
+def clamp_to_box(x, y, m, box):
+    """Keep a shape of radius m centred at (x, y) fully inside the box (1x coords)."""
+    return (min(max(x, box[0] + m), box[2] - m), min(max(y, box[1] + m), box[3] - m))
 
 
 def ray_to_box(cx, cy, ang, box):
@@ -129,13 +138,6 @@ def ray_to_box(cx, cy, ang, box):
     return best
 
 
-def rot(pts, deg):
-    a = math.radians(deg)
-    c, s = math.cos(a), math.sin(a)
-    x, y = pts[:, 0], pts[:, 1]
-    return np.stack([x * c - y * s, x * s + y * c], axis=1)
-
-
 # -----------------------------------------------------------------------------
 # Layout (all numbers in 2x pixels from here on)
 # -----------------------------------------------------------------------------
@@ -143,19 +145,20 @@ class Segment:
     def __init__(self, cfg, fit=1.0):
         self.cfg = cfg
         self.rng = random.Random(cfg["seed"])
-        self.color = hex2rgb(cfg["burst_color"])
+        self.color = hex2rgb(cfg["accent"])
         size = int(C["FONT_SIZE_MAX"] * fit)
         while True:
             self.font = load_font(size * SS)
             full = cfg["text"] + cfg["q"]
-            w = self.font.getlength(full) + 2 * C["OUTLINE_W"] * SS + C["SHADOW_OFFSET"][0] * SS
+            w = (self.font.getlength(full) + 2 * (C["OUTLINE_W"] + C["ACCENT_STROKE_W"]) * SS
+                 + C["SHADOW_OFFSET"][0] * SS)
             if w <= C["TEXT_MAX_W"] * SS or size < 40:
                 break
             size -= 2
         self.size = size
         f = self.font
         self.ow = C["OUTLINE_W"] * SS
-        asc, desc = f.getmetrics()
+        self.aw = C["ACCENT_STROKE_W"] * SS
         bb = f.getbbox(cfg["text"] + cfg["q"])
         self.cap_top, self.cap_bot = bb[1], bb[3]
         self.word_w = f.getlength(cfg["text"])
@@ -164,56 +167,29 @@ class Segment:
         self.text_h = self.cap_bot - self.cap_top
         # static per-letter baseline jiggle -> hand-made feel
         self.letter_dy = [self.rng.uniform(-3, 3) * SS for _ in cfg["text"]]
+        # half-size of the outlined text box (2x px)
+        self.half_w = self.total_w / 2 + self.ow + self.aw
+        self.half_h = self.text_h / 2 + self.ow + self.aw
 
-        # burst geometry (unit spikes, irregular)
-        n = cfg["spikes"]
-        base = [i / n * 2 * math.pi for i in range(n)]
-        self.spike_ang = [a + self.rng.uniform(-0.35, 0.35) * (2 * math.pi / n) for a in base]
-        self.spike_len = [self.rng.uniform(0.55, 1.35) for _ in range(n)]
-        self.valley_jit = [self.rng.uniform(0.9, 1.08) for _ in range(n)]
-        self.rx_in = self.total_w / 2 + C["BURST_PAD"][0] * SS
-        self.ry_in = self.text_h / 2 + C["BURST_PAD"][1] * SS
-        self.spike_px = C["SPIKE_LEN"] * SS
-        k = C["SPIKE_SIDE_FACTOR"]
-        self.spike_len = [l * (k + (1 - k) * abs(math.sin(a)))
-                          for l, a in zip(self.spike_len, self.spike_ang)]
-
-        # speed lines + sparks (static random choices)
-        self.lines = [(self.rng.uniform(0, 2 * math.pi), self.rng.uniform(0.7, 1.2),
-                       self.rng.uniform(0.0, 1.2)) for _ in range(C["SPEED_LINES"])]
-        self.sparks = [(self.rng.uniform(0, 2 * math.pi), self.rng.uniform(0.9, 1.3),
+        # speed lines + sparks (static random choices). The text is wide and sits in a
+        # short band, so they fan out sideways (into the margins), alternating L/R.
+        def side_ang(i, spread):
+            return (math.pi if i % 2 else 0.0) + math.radians(self.rng.uniform(-spread, spread))
+        self.lines = [(side_ang(i, 32), self.rng.uniform(0.7, 1.2),
+                       self.rng.uniform(0.0, 1.2)) for i in range(C["SPEED_LINES"])]
+        self.sparks = [(side_ang(i, 55), self.rng.uniform(0.9, 1.3),
                         self.rng.uniform(0.7, 1.2), self.rng.choice([(255, 255, 255), self.color]))
-                       for _ in range(C["SPARKS"])]
+                       for i in range(C["SPARKS"])]
         self.puffs = [(i / C["PUFFS"] * 2 * math.pi + self.rng.uniform(-0.4, 0.4),
                        self.rng.uniform(0.8, 1.15)) for i in range(C["PUFFS"])]
-
-    # ---- burst polygon, local coords (centered at 0,0), boil-jittered -------
-    def burst_poly(self, boil_seed, scale_len=1.0):
-        r = random.Random(self.cfg["seed"] * 1000 + boil_seed)
-        bj = C["BOIL_PX"] * SS
-        pts = []
-        n = len(self.spike_ang)
-        for i in range(n):
-            a = self.spike_ang[i]
-            a_next = self.spike_ang[(i + 1) % n] + (2 * math.pi if i == n - 1 else 0)
-            # spike tip (radial outward from the inner ellipse)
-            ex, ey = self.rx_in * math.cos(a), self.ry_in * math.sin(a)
-            L = self.spike_px * self.spike_len[i] * scale_len * r.uniform(0.94, 1.06)
-            pts.append((ex + L * math.cos(a) + r.uniform(-bj, bj),
-                        ey + L * math.sin(a) + r.uniform(-bj, bj)))
-            # valley between spikes, slightly inside the ellipse
-            am = (a + a_next) / 2
-            v = self.valley_jit[i] * 0.93
-            pts.append((self.rx_in * v * math.cos(am) + r.uniform(-bj, bj),
-                        self.ry_in * v * math.sin(am) + r.uniform(-bj, bj)))
-        return np.array(pts)
 
     # ---- text layer (word + "?" composited), centered layer -----------------
     def text_layer(self, boil_seed, q_scale, q_stretch, q_rot):
         r = random.Random(self.cfg["seed"] * 7777 + boil_seed)
         ow = self.ow
         sh = (C["SHADOW_OFFSET"][0] * SS, C["SHADOW_OFFSET"][1] * SS)
-        pad = ow + 90 * SS
+        aw = self.aw
+        pad = ow + aw + 90 * SS
         lw = int(self.total_w + 2 * pad)
         lh = int(self.text_h + 2 * pad)
         layer = Image.new("RGBA", (lw, lh), (0, 0, 0, 0))
@@ -229,10 +205,14 @@ class Segment:
             y = y0 + self.letter_dy[i] + r.uniform(-bj, bj)
             sw = max(1, int(round(ow + r.uniform(-1.5, 1.5) * SS)))
             pos.append((x, y, ch, sw))
-        # pass 1: hard shadow, pass 2: black outline, pass 3: white fill
+        # pass 1: hard shadow, 2: accent ring, 3: black outline, 4: white fill
         for x, y, ch, sw in pos:
             d.text((x + sh[0], y + sh[1]), ch, font=f, fill=C["OUTLINE"],
-                   stroke_width=sw, stroke_fill=C["OUTLINE"])
+                   stroke_width=sw + aw, stroke_fill=C["OUTLINE"])
+        if aw:
+            for x, y, ch, sw in pos:
+                d.text((x, y), ch, font=f, fill=self.color, stroke_width=sw + aw,
+                       stroke_fill=self.color)
         for x, y, ch, sw in pos:
             d.text((x, y), ch, font=f, fill=C["OUTLINE"], stroke_width=sw, stroke_fill=C["OUTLINE"])
         for x, y, ch, sw in pos:
@@ -240,7 +220,7 @@ class Segment:
 
         # "?" as its own element: own pop + wobble, pivot at its base
         if q_scale > 0.01:
-            qpad = ow + 20 * SS
+            qpad = ow + aw + 20 * SS
             qw = int(self.q_w + 2 * qpad + sh[0])
             qh = int(self.text_h + 2 * qpad + sh[1])
             q = Image.new("RGBA", (qw, qh), (0, 0, 0, 0))
@@ -248,7 +228,10 @@ class Segment:
             qx, qy = qpad, qpad - self.cap_top
             sw = max(1, int(round(ow + r.uniform(-1.5, 1.5) * SS)))
             qd.text((qx + sh[0], qy + sh[1]), self.cfg["q"], font=f, fill=C["OUTLINE"],
-                    stroke_width=sw, stroke_fill=C["OUTLINE"])
+                    stroke_width=sw + aw, stroke_fill=C["OUTLINE"])
+            if aw:
+                qd.text((qx, qy), self.cfg["q"], font=f, fill=self.color,
+                        stroke_width=sw + aw, stroke_fill=self.color)
             qd.text((qx, qy), self.cfg["q"], font=f, fill=C["TEXT_FILL"],
                     stroke_width=sw, stroke_fill=C["OUTLINE"])
             sx, sy = q_scale / q_stretch, q_scale * q_stretch
@@ -270,7 +253,7 @@ class Segment:
 # Per-frame state
 # -----------------------------------------------------------------------------
 def group_state(seg, t):
-    """Group transform at local frame t (t may be negative for the burst lead)."""
+    """Group transform at local frame t."""
     tilt = seg.cfg["tilt"]
     s = keyed(C["POP_SCALE"], t)
     st = keyed(C["POP_STRETCH"], t)
@@ -286,37 +269,79 @@ def group_state(seg, t):
     return s, st, ang, bob
 
 
+def q_state(t):
+    """Scale, stretch and rotation of the separate "?" at local frame t."""
+    tq = t - C["Q_DELAY"]
+    if tq < 0:
+        return 0, 1, 0
+    qs = keyed(C["Q_POP_SCALE"], tq)
+    qst = keyed(C["Q_POP_STRETCH"], tq)
+    ramp = min(1.0, tq / 6)
+    qr = -C["Q_WOBBLE_DEG"] * math.sin(2 * math.pi * (tq - 3) / C["Q_WOBBLE_PERIOD"]) * ramp
+    qr += 18 * max(0, 1 - tq / 4)  # pops in tipped over
+    return qs, qst, qr
+
+
+def group_image(seg, t, boil):
+    """Transformed text group for local frame t -> (layer, (x, y) @2x) or None."""
+    s, st, ang, bob = group_state(seg, t)
+    if s <= 0.01:
+        return None
+    layer = seg.text_layer(boil, *q_state(t))
+    lw, lh = layer.size
+    nw, nh = max(1, int(lw * s / st)), max(1, int(lh * s * st))
+    layer = layer.resize((nw, nh), Image.LANCZOS)
+    layer = layer.rotate(-ang, resample=Image.BICUBIC, expand=True)
+    cx, cy = seg.cfg["center"][0] * SS, seg.cfg["center"][1] * SS
+    return layer, (int(cx - layer.width / 2), int(cy + bob - layer.height / 2))
+
+
 def fit_extents(seg):
-    """Worst-case extents (1x px, relative to centre) of burst over all frames."""
+    """Worst-case drawn extents (1x px, absolute) of the text group over all frames:
+    the real alpha of the transformed layer, so outline, accent, shadow, the "?" and
+    every pop overshoot are included."""
+    x0 = y0 = 1e9
+    x1 = y1 = -1e9
     n = seg.cfg["end"] - seg.cfg["start"] + 1
-    right = left = up = down = down_rest = 0.0
-    for t in range(n):
-        s, st, ang, bob = group_state(seg, t + C["BURST_LEAD"])
-        poly = seg.burst_poly(t // C["BOIL_EVERY"])
-        poly[:, 0] *= s / st
-        poly[:, 1] *= s * st
-        poly = rot(poly, ang)
-        poly[:, 1] += bob
-        poly /= SS
-        right = max(right, poly[:, 0].max()); left = max(left, -poly[:, 0].min())
-        up = max(up, -poly[:, 1].min()); down = max(down, poly[:, 1].max())
-        if t >= 10:
-            down_rest = max(down_rest, poly[:, 1].max())
-    return right, left, up, down, down_rest
+    # every pop/exit frame, every 3rd hold frame (bob + "?" wobble are slow)
+    frames = sorted(set(range(0, 14)) | set(range(14, n, 3)) | set(range(n - 6, n)))
+    for t in frames:
+        g = group_image(seg, t, (seg.cfg["start"] + t) // C["BOIL_EVERY"])
+        if g is None:
+            continue
+        layer, (px, py) = g
+        bb = layer.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+        if bb is None:
+            continue
+        x0 = min(x0, (px + bb[0]) / SS); y0 = min(y0, (py + bb[1]) / SS)
+        x1 = max(x1, (px + bb[2]) / SS); y1 = max(y1, (py + bb[3]) / SS)
+    b = C["BOIL_PX"]  # boil jitter between sampled frames
+    return x0 - b, y0 - b, x1 + b, y1 + b
 
 
 def build_segment(cfg):
+    """Largest font that keeps every frame inside the allowed box. The centre's y is
+    re-balanced inside the band (y≈ the configured value) so the pop overshoot has
+    equal room up and down."""
+    cfg = dict(cfg)
     cx, cy = cfg["center"]
-    x0, y0, x1, y1 = safe_box()
-    fit = 1.0
-    for _ in range(12):
-        seg = Segment(cfg, fit)
-        r, l, u, d, dr = fit_extents(seg)
-        need = max(r / (x1 - cx), l / (cx - x0), u / (cy - y0), d / (y1 - cy),
-                   dr / (cfg["max_bottom"] - cy))
+    bx0, by0, bx1, by1 = safe_box(cfg["max_bottom"])
+    fit, best = 1.0, None
+    for _ in range(8):
+        seg = Segment(cfg, fit)                  # seg.cfg is cfg: centre updates apply
+        x0, y0, x1, y1 = fit_extents(seg)
+        cy += ((by0 + by1) - (y0 + y1)) / 2      # centre the extents vertically
+        cfg["center"] = (cx, round(cy))
+        need = max((x1 - cx) / (bx1 - cx), (cx - x0) / (cx - bx0),
+                   (y1 - y0) / (by1 - by0))
         if need <= 1.0:
-            return seg
-        fit *= min(0.985, 1.0 / need ** 0.9)
+            best = (seg.size, dict(cfg), fit)
+            if need >= 0.97 or fit >= 1.0:
+                break
+        fit = min(1.0, fit / need * (0.995 if need > 1 else 1.0))
+    if best is None:
+        raise SystemExit(f"could not fit {cfg['text']}")
+    seg = Segment(best[1], best[2])
     return seg
 
 
@@ -338,24 +363,29 @@ def star_pts(cx, cy, r_out, r_in, n=4, rot_deg=0.0):
     return pts
 
 
-def draw_effects(d, seg, tb, center2):
-    """Speed lines + sparks around a burst that popped at burst-time tb=0."""
+def fx_ellipse(seg, t):
+    """Semi-axes (1x px) of the ellipse wrapping the current text box + FX_PAD."""
+    s, st, _, _ = group_state(seg, t)
+    a = seg.half_w / SS * s / st
+    b = seg.half_h / SS * s * st
+    k = 1.15  # ellipse through the box corners, 15% wider than the box
+    return a * k + C["FX_PAD"], b / math.sqrt(1 - 1 / k ** 2) + C["FX_PAD"]
+
+
+def draw_effects(d, seg, te, center2, t):
+    """Speed lines + sparks fired at effect-time te=0 (the text's overshoot peak)."""
     life = C["SPEED_LIFE"]
-    if not (0 <= tb <= life):
+    if not (0 <= te <= life):
         return
-    p = tb / life
-    box = safe_box()
+    box = safe_box(seg.cfg["fx_bottom"])
     cx1, cy1 = center2[0] / SS, center2[1] / SS
-    base_r = max(seg.rx_in, seg.ry_in) / SS
+    rx, ry = fx_ellipse(seg, t)
     ow = 5 * SS
     for ang, ln, delay in seg.lines:
-        q = (tb - delay) / (life - delay)
+        q = (te - delay) / (life - delay)
         if not (0 < q <= 1):
             continue
-        # direction on an ellipse so lines leave from the burst edge
-        ex = (seg.rx_in + seg.spike_px * 0.6) / SS * math.cos(ang)
-        ey = (seg.ry_in + seg.spike_px * 0.6) / SS * math.sin(ang)
-        r0 = math.hypot(ex, ey)
+        r0 = math.hypot(rx * math.cos(ang), ry * math.sin(ang))
         rmax = min(ray_to_box(cx1, cy1, ang, box) - 8, r0 + C["SPEED_LEN"] * ln)
         if rmax <= r0 + 20:
             continue
@@ -365,7 +395,7 @@ def draw_effects(d, seg, tb, center2):
         head, tail = min(head, rmax), min(tail, rmax)
         if head - tail < 6:
             continue
-        wid = 9 * (1 - q * 0.6)
+        wid = 12 * (1 - q * 0.6)
         c, s = math.cos(ang), math.sin(ang)
         nx, ny = -s, c
         hx, hy = cx1 + c * head, cy1 + s * head
@@ -374,38 +404,40 @@ def draw_effects(d, seg, tb, center2):
         pts = [(x * SS, y * SS) for x, y in pts]
         draw_outlined_poly(d, pts, (255, 255, 255), ow)
     for ang, rr, sz, col in seg.sparks:
-        q = tb / (life - 1)
+        q = te / (life - 1)
         if q > 1:
             continue
-        r_burst = math.hypot((seg.rx_in + seg.spike_px) / SS * math.cos(ang),
-                             (seg.ry_in + seg.spike_px) / SS * math.sin(ang))
-        dist = r_burst * (0.95 + 0.25 * q * rr)
+        r_edge = math.hypot(rx * math.cos(ang), ry * math.sin(ang))
+        dist = r_edge * (0.95 + 0.25 * q * rr)
         size = 26 * sz * math.sin(math.pi * min(1, q * 1.15 + 0.1))
         if size < 3:
             continue
-        rmax = ray_to_box(cx1, cy1, ang, box)
-        dist = min(dist, rmax - size - 4)
-        px, py = cx1 + math.cos(ang) * dist, cy1 + math.sin(ang) * dist
+        dist = min(dist, ray_to_box(cx1, cy1, ang, box) - size - 4)
+        if dist < r_edge * 0.85:  # no room outside the text in this direction
+            continue
+        px, py = clamp_to_box(cx1 + math.cos(ang) * dist, cy1 + math.sin(ang) * dist,
+                              size + 5, box)
         pts = star_pts(px * SS, py * SS, size * SS, size * 0.38 * SS, 4, 45 * q + ang * 30)
         draw_outlined_poly(d, pts, col, 4 * SS)
 
 
-def draw_puffs(d, seg, te, center2, extent):
+def draw_puffs(d, seg, te, center2, t):
     """Smoke puffs during the exit; te = frames since exit pop (0..)."""
     if te < 0:
         return
-    box = safe_box()
+    box = safe_box(seg.cfg["fx_bottom"])
+    rx, ry = fx_ellipse(seg, t - te)  # text size just before it collapses
     for i, (ang, k) in enumerate(seg.puffs):
         q = te / 3.0
         grow = math.sin(math.pi * min(1, 0.25 + q * 0.6)) * k
         if grow <= 0.05:
             continue
-        dist = (extent * 0.55 + 40 * SS * q) / SS
-        rmax = ray_to_box(center2[0] / SS, center2[1] / SS, ang, box)
         rad = 48 * grow
-        dist = min(dist, rmax - rad * 1.6)
-        px = center2[0] / SS + math.cos(ang) * dist
-        py = center2[1] / SS + math.sin(ang) * dist
+        f = 0.45 + 0.15 * q
+        dist = math.hypot(rx * f * math.cos(ang), ry * f * math.sin(ang))
+        dist = min(dist, ray_to_box(center2[0] / SS, center2[1] / SS, ang, box) - rad * 1.6)
+        px, py = clamp_to_box(center2[0] / SS + math.cos(ang) * dist,
+                              center2[1] / SS + math.sin(ang) * dist, rad * 1.8 + 5, box)
         blobs = [(0, 0, 1.0), (-0.75, 0.25, 0.7), (0.75, 0.2, 0.75), (0.1, -0.55, 0.65)]
         # outline pass then fill pass so the cluster reads as one cloud
         for pass_ in (0, 1):
@@ -427,50 +459,27 @@ def render_frame(segs, f):
     cx, cy = seg.cfg["center"][0] * SS, seg.cfg["center"][1] * SS
     d = ImageDraw.Draw(canvas)
 
-    # ---- burst (leads the text) + its speed lines/sparks ----
-    tb = t + C["BURST_LEAD"]
-    bs, bst, bang, bbob = group_state(seg, tb)
-    center2 = (cx, cy + bbob)
-    draw_effects(d, seg, tb, center2)
-    if bs > 0.01:
-        poly = seg.burst_poly(boil)
-        poly[:, 0] *= bs / bst
-        poly[:, 1] *= bs * bst
-        poly = rot(poly, bang)
-        poly[:, 0] += center2[0]
-        poly[:, 1] += center2[1]
-        draw_outlined_poly(d, poly, seg.color, C["BURST_OUTLINE_W"] * SS)
+    _, _, _, bob = group_state(seg, t)
+    center2 = (cx, cy + bob)
 
-    # ---- exit puffs ----
-    if seg.cfg["exit"]:
-        te = t - (seg.cfg["end"] - seg.cfg["start"] - 2)
-        draw_puffs(d, seg, te, center2, seg.rx_in)
+    # ---- effects (behind the text) ----
+    if C["EFFECTS"]:
+        draw_effects(d, seg, t - C["FX_AT"], center2, t)
+        if seg.cfg["exit"]:
+            draw_puffs(d, seg, t - (seg.cfg["end"] - seg.cfg["start"] - 2), center2, t)
 
     # ---- text group ----
-    s, st, ang, bob = group_state(seg, t)
-    if s > 0.01:
-        tq = t - C["Q_DELAY"]
-        if tq >= 0:
-            qs = keyed(C["Q_POP_SCALE"], tq)
-            qst = keyed(C["Q_POP_STRETCH"], tq)
-            ramp = min(1.0, tq / 6)
-            qr = -C["Q_WOBBLE_DEG"] * math.sin(2 * math.pi * (tq - 3) / C["Q_WOBBLE_PERIOD"]) * ramp
-            qr += 18 * max(0, 1 - tq / 4)  # pops in tipped over
-        else:
-            qs, qst, qr = 0, 1, 0
-        layer = seg.text_layer(boil, qs, qst, qr)
-        lw, lh = layer.size
-        nw, nh = max(1, int(lw * s / st)), max(1, int(lh * s * st))
-        layer = layer.resize((nw, nh), Image.LANCZOS)
-        layer = layer.rotate(-ang, resample=Image.BICUBIC, expand=True)
-        canvas.alpha_composite(layer, (int(cx - layer.width / 2), int(cy + bob - layer.height / 2)))
+    g = group_image(seg, t, boil)
+    if g is not None:
+        canvas.alpha_composite(g[0], g[1])
 
     out = canvas.resize((C["W"], C["H"]), Image.LANCZOS)
-    # hard guard: nothing may live inside the platform UI zones
+    # hard guard: nothing may live outside the 5% title safe area
     a = np.array(out)
-    a[:C["SAFE_TOP"], :, 3] = 0
-    a[C["H"] - C["SAFE_BOTTOM"]:, :, 3] = 0
-    a[:, C["W"] - C["SAFE_RIGHT"]:, 3] = 0
+    a[:C["SAFE_Y"], :, 3] = 0
+    a[C["H"] - C["SAFE_Y"]:, :, 3] = 0
+    a[:, :C["SAFE_X"], 3] = 0
+    a[:, C["W"] - C["SAFE_X"]:, 3] = 0
     a[a[:, :, 3] == 0, :3] = 0
     return Image.fromarray(a, "RGBA")
 
@@ -483,12 +492,13 @@ def run(cmd):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frames", help="comma list of frames to render only (test mode)")
+    ap.add_argument("--source", default=C["SOURCE_VIDEO"], help="video under preview.mp4")
     args = ap.parse_args()
 
     segs = [build_segment(s) for s in C["SEGMENTS"]]
     for s in segs:
         print(f"{s.cfg['text']}{s.cfg['q']}: font {s.size}px, text block "
-              f"{(s.total_w + 2 * s.ow) / SS:.0f}px wide")
+              f"{2 * s.half_w / SS:.0f}px wide, centre {s.cfg['center']}")
 
     out = C["OUT_DIR"]
     seq = os.path.join(out, "png_seq")
@@ -515,8 +525,10 @@ def main():
          "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "18",
          "-row-mt", "1", "-auto-alt-ref", "0",
          os.path.join(out, "overlay_vp9.webm")])
-    if os.path.exists(C["SOURCE_VIDEO"]):
-        run(["ffmpeg", "-v", "error", "-y", "-i", C["SOURCE_VIDEO"],
+    if not os.path.exists(args.source):
+        print(f"!! {args.source} not found — preview.mp4 skipped")
+    else:
+        run(["ffmpeg", "-v", "error", "-y", "-i", args.source,
              "-framerate", fps, "-i", pat,
              "-filter_complex", "[0:v][1:v]overlay=0:0:format=auto:shortest=1,format=yuv420p[v]",
              "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-crf", "16",
